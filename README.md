@@ -2,7 +2,7 @@
 license: apache-2.0
 configs:
 - config_name: default
-  data_files: "/data/tasks/questions.csv"
+  data_files: "data/tasks/questions.csv"
 ---
 
 # karakuri-bench-v0.1
