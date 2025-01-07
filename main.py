@@ -7,7 +7,6 @@ from weave import Model
 from pydantic import BaseModel
 import asyncio
 from typing import List
-from weave.flow import leaderboard
 from weave.trace.weave_client import get_ref
 from tenacity import (
     retry,
@@ -252,26 +251,5 @@ if __name__ == "__main__":
         )
         
         await evaluation.evaluate(gpt_model)
-        
-        spec = leaderboard.Leaderboard(
-            name="GPT Model Performance",
-            description="""
-            This leaderboard shows the performance of GPT models on various tasks.
-            
-            ### Metrics
-            1. Overall Score: Average score across all evaluations
-            2. Category Scores: Average scores by category
-            """,
-            columns=[
-                leaderboard.LeaderboardColumn(
-                    evaluation_object_ref=get_ref(evaluation).uri(),
-                    scorer_name="check_score",
-                    summary_metric_path="score.mean",
-                    name="Overall Score"
-                )
-            ]
-        )
-        
-        ref = weave.publish(spec)
 
     asyncio.run(main())
