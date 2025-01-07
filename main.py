@@ -7,13 +7,19 @@ from weave import Model
 from pydantic import BaseModel
 import asyncio
 from typing import List
-from weave.trace.weave_client import get_ref
 from tenacity import (
     retry,
     stop_after_attempt,
     wait_exponential,
     retry_if_exception_type
 )
+
+MAX_RETRIES = 5
+INITIAL_RETRY_DELAY = 1
+MAX_RETRY_DELAY = 30
+SEMAPHORE_LIMIT = 10
+PREDICT_MODEL_NAME='gpt-4o-mini-2024-07-18'
+EVALUATE_MODEL_NAME='gpt-4o-mini-2024-07-18'
 
 @weave.op()
 def prepare_dataset(raw_dataset):
@@ -24,7 +30,8 @@ def prepare_dataset(raw_dataset):
             "question": row["question"],
             "example_answer": row["example_answer"],
             "marking_scheme": row["marking_scheme"],
-            "category": row["category"]
+            "category": row["category"],
+            "model_name": PREDICT_MODEL_NAME
         } for row in raw_dataset.rows]
     )
 
@@ -43,7 +50,10 @@ async def check_score(question: str, example_answer: str, marking_scheme: str, o
         original_category = output.get("original_category", output["category"])
         
         return {
-            "score": result.score,
+            "metrics": {
+                "score": result.score,
+                "model_name": PREDICT_MODEL_NAME,
+            },
             "category": original_category,
             "response_text": result.response_text,
             "category_score": {
@@ -53,32 +63,32 @@ async def check_score(question: str, example_answer: str, marking_scheme: str, o
     except Exception as e:
         print(f"Evaluation error: {str(e)}")
         return {
-            "score": None,
+            "metrics": {
+                "score": None,
+                "model_name": PREDICT_MODEL_NAME,
+            },
             "category": None,
             "response_text": str(e),
             "category_score": None
         }
 
 @weave.op()
-async def gpt_model(question: str, category: str):
+async def gpt_model(question: str, category: str, model_name: str):
     """質問に対する回答を生成する関数"""
     try:
         response = await model.predict(question)
         return {
             "answer": response.choices[0].message.content,
-            "category": category
+            "category": category,
+            "model_name": model_name
         }
     except Exception as e:
         print(f"Prediction error: {str(e)}")
         return {
             "answer": str(e),
-            "category": "error"
+            "category": "error",
+            "model_name": model_name
         }
-
-MAX_RETRIES = 5
-INITIAL_RETRY_DELAY = 1
-MAX_RETRY_DELAY = 30
-SEMAPHORE_LIMIT = 10
 
 class EvaluationResult(BaseModel):
     response_text: str
@@ -239,17 +249,24 @@ if __name__ == "__main__":
         dataset = prepare_dataset(raw_dataset)
         
         global model
+        
         model = GPTModel(
-            predict_model_name='gpt-4o-mini-2024-07-18',
-            evaluate_model_name='gpt-4o-mini-2024-07-18',
+            predict_model_name=PREDICT_MODEL_NAME,
+            evaluate_model_name=EVALUATE_MODEL_NAME,
         )
         
         evaluation = weave.Evaluation(
-            name="GPT Model Evaluation",
+            name=f"{PREDICT_MODEL_NAME} Evaluation",
             dataset=dataset,
             scorers=[check_score]
         )
         
-        await evaluation.evaluate(gpt_model)
+        await evaluation.evaluate(
+            gpt_model,
+            __weave={
+                "display_name": PREDICT_MODEL_NAME,
+                "group": "model_comparison"
+            }
+        )
 
     asyncio.run(main())
