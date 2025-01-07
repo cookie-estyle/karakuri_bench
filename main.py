@@ -12,6 +12,11 @@ from tenacity import (
     retry_if_exception_type
 )
 
+MAX_RETRIES = 5
+INITIAL_RETRY_DELAY = 1
+MAX_RETRY_DELAY = 30
+SEMAPHORE_LIMIT = 10
+
 class EvaluationResult(BaseModel):
     response_text: str
     score: int | None
@@ -20,9 +25,6 @@ class EvaluationResult(BaseModel):
 class GPTModel(Model):
     predict_model_name: str
     evaluate_model_name: str
-    max_retries: int = 5
-    initial_retry_delay: float = 1
-    max_retry_delay: float = 30
     
     @retry(
         stop=stop_after_attempt(3),
@@ -32,11 +34,10 @@ class GPTModel(Model):
     @weave.op()
     async def predict(self, question: str):
         client = AsyncOpenAI()
-        prompt = question
         try:
             response = await client.chat.completions.create(
                 model=self.predict_model_name,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[{"role": "user", "content": question}],
                 temperature=0,
             )
             return response
@@ -54,7 +55,7 @@ class GPTModel(Model):
         retries = 0
         last_error = None
         
-        for attempt in range(self.max_retries):
+        for attempt in range(MAX_RETRIES):
             try:
                 client = AsyncOpenAI()
                 system_prompt = f"""
@@ -66,6 +67,7 @@ class GPTModel(Model):
 【評点】（1以上5以下の整数）
 ```
                 """.strip()
+
                 prompt = f"""
 # 問題
 {question}
@@ -102,18 +104,17 @@ class GPTModel(Model):
                     last_error = e
                     
             except Exception as e:
-                print(f"Evaluation error (attempt {attempt + 1}/{self.max_retries}): {str(e)}")
+                print(f"Evaluation error (attempt {attempt + 1}/{MAX_RETRIES}): {str(e)}")
                 last_error = e
             
             retries += 1
-            if attempt < self.max_retries - 1:
+            if attempt < MAX_RETRIES - 1:
                 delay = min(
-                    self.max_retry_delay,
-                    self.initial_retry_delay * (2 ** attempt)
+                    MAX_RETRY_DELAY,
+                    INITIAL_RETRY_DELAY * (2 ** attempt)
                 )
                 await asyncio.sleep(delay)
         
-        # すべてのリトライが失敗した場合
         return EvaluationResult(
             response_text=f"Evaluation failed after {retries} attempts. Last error: {str(last_error)}",
             score=None,
@@ -129,7 +130,7 @@ class GPTModel(Model):
         return await asyncio.gather(*tasks)
 
     async def evaluate_all(self, answers: List[str], rows: List[dict]):
-        semaphore = asyncio.Semaphore(10)
+        semaphore = asyncio.Semaphore(SEMAPHORE_LIMIT)
         
         async def evaluate_with_semaphore(answer, row):
             async with semaphore:
@@ -158,12 +159,9 @@ class GPTModel(Model):
 
 if __name__ == "__main__":
     weave.init("karakuri-bench/weave-test")
-
     dataset = weave.ref('karakuri-bench-dataset:latest').get()
-
     model = GPTModel(
         predict_model_name='gpt-4o-mini-2024-07-18',
         evaluate_model_name='gpt-4o-mini-2024-07-18',
     )
-
     results = model.execute(dataset)
