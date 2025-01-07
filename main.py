@@ -19,6 +19,7 @@ SEMAPHORE_LIMIT = 10
 
 class EvaluationResult(BaseModel):
     response_text: str
+    category: str
     score: int | None
     retries: int = 0
 
@@ -48,6 +49,7 @@ class GPTModel(Model):
     async def evaluate_with_retry(
         self, 
         answer: str, 
+        category: str, 
         question: str, 
         example_answer: str, 
         marking_scheme: str
@@ -96,6 +98,7 @@ class GPTModel(Model):
                     score = min(5, max(1, int(response_text.split("【評点】")[1].lstrip()[0])))
                     return EvaluationResult(
                         response_text=response_text,
+                        category=category,
                         score=score,
                         retries=retries
                     )
@@ -117,13 +120,14 @@ class GPTModel(Model):
         
         return EvaluationResult(
             response_text=f"Evaluation failed after {retries} attempts. Last error: {str(last_error)}",
+            category=category,
             score=None,
             retries=retries
         )
 
     @weave.op()
-    async def evaluate(self, answer: str, question: str, example_answer: str, marking_scheme: str):
-        return await self.evaluate_with_retry(answer, question, example_answer, marking_scheme)
+    async def evaluate(self, answer: str, category: str, question: str, example_answer: str, marking_scheme: str):
+        return await self.evaluate_with_retry(answer, category, question, example_answer, marking_scheme)
 
     async def predict_all(self, questions: List[str]):
         tasks = [self.predict(question) for question in questions]
@@ -136,6 +140,7 @@ class GPTModel(Model):
             async with semaphore:
                 return await self.evaluate(
                     answer=answer,
+                    category=row["category"],
                     question=row["question"],
                     example_answer=row["example_answer"],
                     marking_scheme=row["marking_scheme"]
@@ -154,7 +159,7 @@ class GPTModel(Model):
 
     def execute(self, dataset):
         data = [{key: value for key, value in row.items()} for row in dataset.rows]
-        df = pl.DataFrame(data)
+        df = pl.DataFrame(data).head(2)
         return asyncio.run(self.execute_async(df))
 
 if __name__ == "__main__":
