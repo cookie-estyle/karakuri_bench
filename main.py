@@ -1,16 +1,80 @@
 import weave
+from weave import Dataset
+import re
 import polars as pl
 from openai import AsyncOpenAI
 from weave import Model
 from pydantic import BaseModel
 import asyncio
 from typing import List
+from weave.flow import leaderboard
+from weave.trace.weave_client import get_ref
 from tenacity import (
     retry,
     stop_after_attempt,
     wait_exponential,
     retry_if_exception_type
 )
+
+@weave.op()
+def prepare_dataset(raw_dataset):
+    """WeaveのDataset形式にデータを変換する"""
+    return weave.Dataset(
+        name="evaluation-dataset",
+        rows=[{
+            "question": row["question"],
+            "example_answer": row["example_answer"],
+            "marking_scheme": row["marking_scheme"],
+            "category": row["category"]
+        } for row in raw_dataset.rows]
+    )
+
+@weave.op()
+async def check_score(question: str, example_answer: str, marking_scheme: str, output: dict):
+    """回答のスコアを評価する関数"""
+    try:
+        result = await model.evaluate_with_retry(
+            answer=output["answer"],
+            category=output["category"],
+            question=question,
+            example_answer=example_answer,
+            marking_scheme=marking_scheme
+        )
+        
+        original_category = output.get("original_category", output["category"])
+        
+        return {
+            "score": result.score,
+            "category": original_category,
+            "response_text": result.response_text,
+            "category_score": {
+                original_category: result.score
+            }
+        }
+    except Exception as e:
+        print(f"Evaluation error: {str(e)}")
+        return {
+            "score": None,
+            "category": None,
+            "response_text": str(e),
+            "category_score": None
+        }
+
+@weave.op()
+async def gpt_model(question: str, category: str):
+    """質問に対する回答を生成する関数"""
+    try:
+        response = await model.predict(question)
+        return {
+            "answer": response.choices[0].message.content,
+            "category": category
+        }
+    except Exception as e:
+        print(f"Prediction error: {str(e)}")
+        return {
+            "answer": str(e),
+            "category": "error"
+        }
 
 MAX_RETRIES = 5
 INITIAL_RETRY_DELAY = 1
@@ -95,7 +159,13 @@ class GPTModel(Model):
                 
                 response_text = response.choices[0].message.content
                 try:
-                    score = min(5, max(1, int(response_text.split("【評点】")[1].lstrip()[0])))
+                    score_text = response_text.split("【評点】")[1].strip()
+                    score_match = re.search(r'[1-5]', score_text)
+                    if score_match:
+                        score = int(score_match.group())
+                    else:
+                        raise ValueError("No valid score found")
+                    
                     return EvaluationResult(
                         response_text=response_text,
                         category=category,
@@ -159,14 +229,49 @@ class GPTModel(Model):
 
     def execute(self, dataset):
         data = [{key: value for key, value in row.items()} for row in dataset.rows]
-        df = pl.DataFrame(data).head(2)
+        df = pl.DataFrame(data)
         return asyncio.run(self.execute_async(df))
 
 if __name__ == "__main__":
-    weave.init("karakuri-bench/weave-test")
-    dataset = weave.ref('karakuri-bench-dataset:latest').get()
-    model = GPTModel(
-        predict_model_name='gpt-4o-mini-2024-07-18',
-        evaluate_model_name='gpt-4o-mini-2024-07-18',
-    )
-    results = model.execute(dataset)
+    async def main():
+        weave.init("karakuri-bench/weave-test")
+        raw_dataset = weave.ref('karakuri-bench-dataset:latest').get()
+        
+        dataset = prepare_dataset(raw_dataset)
+        
+        global model
+        model = GPTModel(
+            predict_model_name='gpt-4o-mini-2024-07-18',
+            evaluate_model_name='gpt-4o-mini-2024-07-18',
+        )
+        
+        evaluation = weave.Evaluation(
+            name="GPT Model Evaluation",
+            dataset=dataset,
+            scorers=[check_score]
+        )
+        
+        await evaluation.evaluate(gpt_model)
+        
+        spec = leaderboard.Leaderboard(
+            name="GPT Model Performance",
+            description="""
+            This leaderboard shows the performance of GPT models on various tasks.
+            
+            ### Metrics
+            1. Overall Score: Average score across all evaluations
+            2. Category Scores: Average scores by category
+            """,
+            columns=[
+                leaderboard.LeaderboardColumn(
+                    evaluation_object_ref=get_ref(evaluation).uri(),
+                    scorer_name="check_score",
+                    summary_metric_path="score.mean",
+                    name="Overall Score"
+                )
+            ]
+        )
+        
+        ref = weave.publish(spec)
+
+    asyncio.run(main())
