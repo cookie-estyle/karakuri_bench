@@ -5,7 +5,7 @@ from openai import OpenAI
 import asyncio
 from pydantic import BaseModel
 
-PREDICT_MODEL_NAME='gpt-4o-mini-2024-07-18'
+PREDICT_MODEL_NAME = 'gpt-4o-mini-2024-07-18'
 EVALUATE_MODEL_NAME = 'gpt-4o-2024-11-20'
 MAX_RETRIES = 5
 INITIAL_RETRY_DELAY = 1
