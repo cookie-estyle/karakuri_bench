@@ -13,7 +13,7 @@ INITIAL_RETRY_DELAY = 1
 MAX_RETRY_DELAY = 30
 SEMAPHORE_LIMIT = 10
 PREDICT_MODEL_NAME='gpt-4o-mini-2024-07-18'
-EVALUATE_MODEL_NAME='gpt-4o-mini-2024-07-18'
+EVALUATE_MODEL_NAME='gpt-4o-2024-11-20'
 
 @weave.op()
 def prepare_dataset(raw_dataset):
