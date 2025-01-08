@@ -11,30 +11,6 @@ MAX_RETRIES = 5
 INITIAL_RETRY_DELAY = 1
 MAX_RETRY_DELAY = 30
 
-SYSTEM_PROMPT = """
-あなたは採点者です。【問題】【正解例】【採点基準】【回答】が与えられるので、以下のフォーマットに従って回答を評価してください。
-
-# 評価フォーマット
-```
-【採点基準に沿った回答の評価】（自由記述）
-【評点】（1以上5以下の整数）
-```
-"""
-
-USER_PROMPT = """
-# 問題
-{question}
-
-# 正解例
-{example_answer}
-
-# 採点基準
-{marking_scheme}
-
-# 回答
-{answer}
-"""
-
 class EvaluationResult(BaseModel):
     response_text: str
     category: str
@@ -146,6 +122,11 @@ weave.init("karakuri-bench/weave-test")
 
 dataset = weave.ref('karakuri-bench-dataset:latest').get()
 dataset = [{key: value for key, value in row.items()} for row in dataset.rows]
+
+prompt_dataset = weave.ref('evaluate_prompt:latest').get()
+row = next(iter(prompt_dataset.rows)) 
+SYSTEM_PROMPT, USER_PROMPT = row['system_prompt'], row['user_prompt']
+
 model = GPTModel(predict_model_name=PREDICT_MODEL_NAME)
 evaluation = weave.Evaluation(dataset=dataset, scorers=[evaluate])
 asyncio.run(evaluation.evaluate(model))
