@@ -1,5 +1,4 @@
 import weave
-from weave import Dataset
 import re
 import polars as pl
 from openai import AsyncOpenAI
@@ -7,12 +6,7 @@ from weave import Model
 from pydantic import BaseModel
 import asyncio
 from typing import List
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type
-)
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 MAX_RETRIES = 5
 INITIAL_RETRY_DELAY = 1
