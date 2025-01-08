@@ -110,7 +110,10 @@ async def evaluate(
                 return {
                     "response_text": response_text,
                     "category": category,
-                    "score": score,
+                    "score": {
+                        "overall": score,
+                        f"{category}": score
+                    },
                     "retries": retries
                 }
             except Exception as e:
@@ -132,7 +135,10 @@ async def evaluate(
     return {
         "response_text": f"Evaluation failed after {retries} attempts. Last error: {str(last_error)}",
         "category": category,
-        "score": None,
+        "score": {
+            "overall": None,
+            f"{category}": None
+        },
         "retries": retries
     }
 
