@@ -12,18 +12,21 @@ dataset = Dataset(
 )
 weave.publish(dataset)
 
-prompts = [
+evaluation_prompt = weave.MessagesPrompt([
     {
-        "system_prompt": """
-あなたは採点者です。【問題】【正解例】【採点基準】【回答】が与えられるので、以下のフォーマットに従って回答を評価してください。
+        "role": "system",
+        "content": """あなたは採点者です。【問題】【正解例】【採点基準】【回答】が与えられるので、以下のフォーマットに従って回答を評価してください。
 
 # 評価フォーマット
 ```
 【採点基準に沿った回答の評価】（自由記述）
 【評点】（1以上5以下の整数）
 ```
-""",
-        "user_prompt": """
+"""
+    },
+    {
+        "role": "user",
+        "content": """
 # 問題
 {question}
 
@@ -35,13 +38,8 @@ prompts = [
 
 # 回答
 {answer}
-""",
-    },
-]
+"""
+    }
+])
 
-prompt_dataset = Dataset(
-    name="evaluate_prompt",
-    rows=prompts,
-)
-
-weave.publish(prompt_dataset)
+weave.publish(evaluation_prompt, name="evaluation_prompt")
