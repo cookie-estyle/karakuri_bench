@@ -50,6 +50,7 @@ async def evaluate(
     example_answer=None,
     marking_scheme=None,
 ) -> EvaluationResult:
+    print(f"Evaluating {index}/{len(dataset)}: {category}")
 
     retries = 0
     last_error = None
