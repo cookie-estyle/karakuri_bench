@@ -17,7 +17,9 @@ class EvaluationResult(BaseModel):
     score: int | None
     retries: int = 0
 
-class GPTModel(Model):
+class_name = PREDICT_MODEL_NAME.replace('-', '_')
+exec(f"""
+class {class_name}(Model):
     predict_model_name: str
 
     @weave.op()
@@ -27,16 +29,17 @@ class GPTModel(Model):
             response = client.chat.completions.create(
                 model=self.predict_model_name,
                 messages=[
-                    {"role": "user", "content": question}
+                    {{"role": "user", "content": question}}
                 ],
                 temperature=0.0,
-                response_format={"type": "text"},
+                response_format={{"type": "text"}},
             )
             answer = response.choices[0].message.content
-            return {'answer': answer, 'question': question}
+            return {{'answer': answer, 'question': question}}
         except Exception as e:
-            print(f"Prediction error: {str(e)}")
+            print(f"Prediction error: {{str(e)}}")
             raise
+""")
 
 @weave.op()
 async def evaluate(
@@ -127,6 +130,6 @@ prompt_dataset = weave.ref('evaluate_prompt:latest').get()
 row = next(iter(prompt_dataset.rows)) 
 SYSTEM_PROMPT, USER_PROMPT = row['system_prompt'], row['user_prompt']
 
-model = GPTModel(predict_model_name=PREDICT_MODEL_NAME)
+model = eval(f"{class_name}")(predict_model_name=PREDICT_MODEL_NAME)
 evaluation = weave.Evaluation(dataset=dataset, scorers=[evaluate])
 asyncio.run(evaluation.evaluate(model))
