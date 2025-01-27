@@ -17,7 +17,7 @@ class EvaluationResult(BaseModel):
     score: int | None
     retries: int = 0
 
-class_name = PREDICT_MODEL_NAME.replace('-', '_')
+class_name = PREDICT_MODEL_NAME.replace('-', '_').replace('.', '_')
 exec(f"""
 class {class_name}(Model):
     predict_model_name: str
