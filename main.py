@@ -4,12 +4,14 @@ from weave import Model
 from openai import OpenAI
 import asyncio
 from pydantic import BaseModel
+from models.predict import ModelTemplate
 
-PREDICT_MODEL_NAME = 'gpt-4o-mini-2024-07-18'
-EVALUATE_MODEL_NAME = 'gpt-4o-2024-11-20'
-MAX_RETRIES = 5
-INITIAL_RETRY_DELAY = 1
-MAX_RETRY_DELAY = 30
+API_TYPE: str = "openai"
+PREDICT_MODEL_NAME: str = 'o3-mini-2025-01-31'
+EVALUATE_MODEL_NAME: str = 'gpt-4o-2024-11-20'
+MAX_RETRIES: int = 5
+INITIAL_RETRY_DELAY: int = 1
+MAX_RETRY_DELAY: int = 30
 
 class EvaluationResult(BaseModel):
     response_text: str
@@ -18,28 +20,12 @@ class EvaluationResult(BaseModel):
     retries: int = 0
 
 class_name = PREDICT_MODEL_NAME.replace('-', '_').replace('.', '_')
-exec(f"""
-class {class_name}(Model):
-    predict_model_name: str
-
-    @weave.op()
-    def predict(self, question: str) -> dict:
-        client = OpenAI()
-        try:
-            response = client.chat.completions.create(
-                model=self.predict_model_name,
-                messages=[
-                    {{"role": "user", "content": question}}
-                ],
-                temperature=0.0,
-                response_format={{"type": "text"}},
-            )
-            answer = response.choices[0].message.content
-            return {{'answer': answer, 'question': question}}
-        except Exception as e:
-            print(f"Prediction error: {{str(e)}}")
-            raise
-""")
+model_template = ModelTemplate.get_template(
+    API_TYPE,
+    PREDICT_MODEL_NAME,
+    class_name
+)
+exec(model_template)
 
 @weave.op()
 async def evaluate(
