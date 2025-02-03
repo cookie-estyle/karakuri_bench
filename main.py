@@ -5,9 +5,10 @@ from openai import OpenAI
 import asyncio
 from pydantic import BaseModel
 from predictor import ModelTemplate
+from pydantic import BaseModel, PrivateAttr
 
-API_TYPE: str = "openai"
-PREDICT_MODEL_NAME: str = 'o3-mini-2025-01-31'
+API_TYPE = 'bedrock'
+PREDICT_MODEL_NAME: str = 'anthropic.claude-3-opus-20240229-v1:0'
 EVALUATE_MODEL_NAME: str = 'gpt-4o-2024-11-20'
 MAX_RETRIES: int = 5
 INITIAL_RETRY_DELAY: int = 1
@@ -19,7 +20,7 @@ class EvaluationResult(BaseModel):
     score: int | None
     retries: int = 0
 
-class_name = PREDICT_MODEL_NAME.replace('-', '_').replace('.', '_')
+class_name = PREDICT_MODEL_NAME.replace('-', '_').replace('.', '_').replace(':','_')
 model_template = ModelTemplate.get_template(
     API_TYPE,
     PREDICT_MODEL_NAME,
@@ -38,15 +39,37 @@ async def evaluate(
 ) -> EvaluationResult:
     print(f"Evaluating {index}/{len(dataset)}: {category}")
 
+    if output is None:
+        return {
+            "response_text": "Prediction failed: No output received",
+            "category": category,
+            "score": {
+                "overall": None,
+                f"{category}": None
+            },
+            "retries": 0
+        }
+
+    if not isinstance(output, dict) or 'answer' not in output:
+        return {
+            "response_text": f"Prediction failed: Invalid output format - {str(output)}",
+            "category": category,
+            "score": {
+                "overall": None,
+                f"{category}": None
+            },
+            "retries": 0
+        }
+
     retries = 0
     last_error = None
     client = OpenAI()
 
     user_prompt = USER_PROMPT.format(
-        question = question,
-        example_answer = example_answer,
-        marking_scheme = marking_scheme,
-        answer = output["answer"],
+        question=question,
+        example_answer=example_answer,
+        marking_scheme=marking_scheme,
+        answer=output["answer"],
     ).strip()
 
     for attempt in range(MAX_RETRIES):

@@ -2,3 +2,5 @@ openai
 polars
 tenacity
 weave
+boto3
+botocore
