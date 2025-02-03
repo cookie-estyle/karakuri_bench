@@ -4,7 +4,7 @@ from weave import Model
 from openai import OpenAI
 import asyncio
 from pydantic import BaseModel
-from models.predict import ModelTemplate
+from predict import ModelTemplate
 
 API_TYPE: str = "openai"
 PREDICT_MODEL_NAME: str = 'o3-mini-2025-01-31'
