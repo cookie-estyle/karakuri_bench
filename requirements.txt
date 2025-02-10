@@ -4,3 +4,5 @@ tenacity
 weave
 boto3
 botocore
+langchain-google-genai
+google-generativeai

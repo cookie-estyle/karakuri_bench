@@ -15,10 +15,15 @@ class ModelTemplate:
             },
             "bedrock": {
                 "standard": cls._get_bedrock_template
+            },
+            "google": {
+                "standard": cls._get_google_template
             }
         }
         
         if api_type == "bedrock":
+            template_type = "standard"
+        elif api_type == "google":
             template_type = "standard"
         else:
             template_type = "o_series" if model_name.startswith("o") else "standard"
@@ -75,6 +80,47 @@ class {class_name}(Model):
 '''
 
     @staticmethod
+    def _get_google_template(class_name: str) -> str:
+        return f'''
+class {class_name}(Model):
+    predict_model_name: str
+
+    @weave.op()
+    def predict(self, question: str) -> dict:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        from google.generativeai.types import HarmCategory, HarmBlockThreshold
+        import os
+
+        try:
+            # 安全性設定の構成
+            categories = [
+                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                HarmCategory.HARM_CATEGORY_HARASSMENT,
+                HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+            ]
+            safety_settings = {{cat: HarmBlockThreshold.BLOCK_NONE for cat in categories}}
+
+            # モデルの初期化
+            llm = ChatGoogleGenerativeAI(
+                model=self.predict_model_name,
+                api_key=os.environ["GOOGLE_API_KEY"],
+                safety_settings=safety_settings,
+                temperature=0.0,
+            )
+
+            # 予測の実行
+            response = llm.invoke(question)
+            answer = response.content
+
+            return {{'answer': answer, 'question': question}}
+
+        except Exception as e:
+            print(f"Prediction error: {{str(e)}}")
+            return {{'answer': f"Error: {{str(e)}}", 'question': question}}
+'''
+
+    @staticmethod
     def _get_bedrock_template(class_name: str) -> str:
         return f'''
 import json
@@ -106,21 +152,9 @@ class {class_name}(Model):
         time_since_last_request = current_time - self._last_request_time
         if time_since_last_request < self._min_request_interval:
             sleep_time = self._min_request_interval - time_since_last_request
-            # ジッターを追加してサーバーへの負荷を分散
             sleep_time += random.uniform(0, 0.1)
             time.sleep(sleep_time)
         self._last_request_time = time.time()
-
-    def _format_llama_prompt(self, messages):
-        formatted_prompt = ""
-        for msg in messages:
-            if msg["role"] == "system":
-                formatted_prompt += f"[INST] <<SYS>>\\n{{msg['content']}}\\n<</SYS>>\\n[/INST]\\n"
-            elif msg["role"] == "user":
-                formatted_prompt += f"[INST] {{msg['content']}} [/INST]\\n"
-            elif msg["role"] == "assistant":
-                formatted_prompt += f"{{msg['content']}}\\n"
-        return formatted_prompt
 
     @retry(
         stop=stop_after_attempt(5),
@@ -137,22 +171,58 @@ class {class_name}(Model):
     @weave.op()
     def predict(self, question: str) -> dict:
         try:
-            messages = [{{"role": "user", "content": question}}]
-            is_claude = "anthropic" in self.predict_model_name.lower()
-            is_llama = "llama" in self.predict_model_name.lower()
-
-            if is_claude:
+            # モデルタイプの判定
+            model_id = self.predict_model_name.lower()
+            
+            if "amazon.nova" in model_id:
+                body_dict = {{
+                    "messages": [
+                        {{
+                            "role": "user",
+                            "content": [
+                                {{
+                                    "text": question
+                                }}
+                            ]
+                        }}
+                    ]
+                }}
+            elif "anthropic" in model_id:
                 body_dict = {{
                     "anthropic_version": "bedrock-2023-05-31",
                     "max_tokens": 1024,
-                    "messages": messages,
+                    "messages": [
+                        {{
+                            "role": "user",
+                            "content": [
+                                {{
+                                    "type": "text",
+                                    "text": question
+                                }}
+                            ]
+                        }}
+                    ],
                     **self._generator_config,
                 }}
-            elif is_llama:
-                prompt = self._format_llama_prompt(messages)
+            elif "llama" in model_id:
+                prompt = self._format_llama_prompt([{{"role": "user", "content": question}}])
                 body_dict = {{
                     "prompt": prompt,
                     "max_gen_len": 1024,
+                    **self._generator_config,
+                }}
+            elif "amazon.titan" in model_id:
+                body_dict = {{
+                    "inputText": question,
+                    "textGenerationConfig": {{
+                        "maxTokenCount": 1024,
+                        **self._generator_config,
+                    }}
+                }}
+            elif "ai21" in model_id:
+                body_dict = {{
+                    "prompt": question,
+                    "maxTokens": 1024,
                     **self._generator_config,
                 }}
             else:
@@ -162,10 +232,18 @@ class {class_name}(Model):
                 response = self._invoke_model(body_dict)
                 response_body = json.loads(response.get("body").read())
                 
-                if is_claude:
+                if "amazon.nova" in model_id:
+                    answer = response_body.get("output", {{}}).get("message", {{}}).get("content", [{{}}])[0].get("text", "")
+                elif "anthropic" in model_id:
                     answer = response_body.get("content")[0].get("text", "")
-                elif is_llama:
+                elif "llama" in model_id:
                     answer = response_body.get("generation", "")
+                elif "amazon.titan" in model_id:
+                    answer = response_body.get("results", [{{}}])[0].get("outputText", "")
+                elif "ai21" in model_id:
+                    answer = response_body.get("completions", [{{}}])[0].get("data", {{}}).get("text", "")
+                else:
+                    answer = "Unsupported model response format"
                 
                 return {{"answer": answer, "question": question}}
                 
