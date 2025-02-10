@@ -6,13 +6,15 @@ import asyncio
 from pydantic import BaseModel
 from predictor import ModelTemplate
 from pydantic import BaseModel, PrivateAttr
+import os
 
 API_TYPE = 'bedrock'
 PREDICT_MODEL_NAME: str = 'anthropic.claude-3-opus-20240229-v1:0'
 EVALUATE_MODEL_NAME: str = 'gpt-4o-2024-11-20'
 MAX_RETRIES: int = 5
-INITIAL_RETRY_DELAY: int = 1
+INITIAL_RETRY_DELAY: int = 5
 MAX_RETRY_DELAY: int = 30
+os.environ["WEAVE_PARALLELISM"] = "2"
 
 class EvaluationResult(BaseModel):
     response_text: str
