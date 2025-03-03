@@ -1,20 +1,18 @@
 import weave
 import re
+import tomli
 from weave import Model
 from openai import OpenAI
 import asyncio
 from pydantic import BaseModel
 from predictor import ModelTemplate
 from pydantic import BaseModel, PrivateAttr
+from dotenv import load_dotenv
 import os
 
-API_TYPE = 'bedrock'
-PREDICT_MODEL_NAME: str = 'anthropic.claude-3-opus-20240229-v1:0'
-EVALUATE_MODEL_NAME: str = 'gpt-4o-2024-11-20'
-MAX_RETRIES: int = 5
-INITIAL_RETRY_DELAY: int = 5
-MAX_RETRY_DELAY: int = 30
-os.environ["WEAVE_PARALLELISM"] = "2"
+load_dotenv(override=True)
+with open("config.toml", "rb") as f:
+    config = tomli.load(f)
 
 class EvaluationResult(BaseModel):
     response_text: str
@@ -22,10 +20,10 @@ class EvaluationResult(BaseModel):
     score: int | None
     retries: int = 0
 
-class_name = PREDICT_MODEL_NAME.replace('-', '_').replace('.', '_').replace(':','_')
+class_name = config['predict_model_name'].replace('-', '_').replace('.', '_').replace(':','_')
 model_template = ModelTemplate.get_template(
-    API_TYPE,
-    PREDICT_MODEL_NAME,
+    config['api_type'],
+    config['predict_model_name'],
     class_name
 )
 exec(model_template)
@@ -71,14 +69,14 @@ async def evaluate(
         question=question,
         example_answer=example_answer,
         marking_scheme=marking_scheme,
-        answer=output["answer"],
+        answer=output['answer'],
     ).strip()
 
-    for attempt in range(MAX_RETRIES):
+    for attempt in range(config['max_retries']):
         try:
             try:
                 response = client.chat.completions.create(
-                    model=EVALUATE_MODEL_NAME,
+                    model=config['evaluate_model_name'],
                     messages=[
                         {"role": "system", "content": SYSTEM_PROMPT.strip()},
                         {"role": "user", "content": user_prompt},
@@ -112,14 +110,14 @@ async def evaluate(
                 last_error = e
 
         except Exception as e:
-            print(f"Evaluation error (attempt {attempt + 1}/{MAX_RETRIES}): {str(e)}")
+            print(f"Evaluation error (attempt {attempt + 1}/{config['max_retries']}): {str(e)}")
             last_error = e
 
         retries += 1
-        if attempt < MAX_RETRIES - 1:
+        if attempt < config['max_retries'] - 1:
             delay = min(
-                MAX_RETRY_DELAY,
-                INITIAL_RETRY_DELAY * (2 ** attempt)
+                config['max_retry_delay'],
+                config['initial_retry_delay'] * (2 ** attempt)
             )
             await asyncio.sleep(delay)
 
@@ -133,15 +131,15 @@ async def evaluate(
         "retries": retries
     }
 
-weave.init("karakuri-bench/weave-test")
+weave.init(config['project'])
 
-dataset = weave.ref('karakuri-bench-dataset:latest').get()
+dataset = weave.ref(config['dataset_ref']).get()
 dataset = [{key: value for key, value in row.items()} for row in dataset.rows]
 
-prompt_dataset = weave.ref('evaluate_prompt:latest').get()
-row = next(iter(prompt_dataset.rows)) 
-SYSTEM_PROMPT, USER_PROMPT = row['system_prompt'], row['user_prompt']
+prompt_dataset = weave.ref(config['evaluate_prompt_ref']).get()
+SYSTEM_PROMPT = prompt_dataset.messages[0].get('content')
+USER_PROMPT = prompt_dataset.messages[1].get('content')
 
-model = eval(f"{class_name}")(predict_model_name=PREDICT_MODEL_NAME)
+model = eval(f"{class_name}")(predict_model_name=config['predict_model_name'])
 evaluation = weave.Evaluation(dataset=dataset, scorers=[evaluate])
 asyncio.run(evaluation.evaluate(model))

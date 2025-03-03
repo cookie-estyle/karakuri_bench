@@ -6,3 +6,5 @@ boto3
 botocore
 langchain-google-genai
 google-generativeai
+python-dotenv
+tomli

@@ -135,7 +135,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 class {class_name}(Model):
     predict_model_name: str
     _bedrock_runtime: object = PrivateAttr(default=None)
-    _generator_config: dict = PrivateAttr(default={{"temperature": 0.7, "top_p": 0.9}})
+    _generator_config: dict = PrivateAttr(default={{"temperature": 0.0, "top_p": 1.0}})
     _last_request_time: float = PrivateAttr(default=0)
     _min_request_interval: float = PrivateAttr(default=1.0)  # 最小リクエスト間隔（秒）
     
