@@ -1,7 +1,7 @@
 import weave
 import re
 import tomli
-from weave import Model
+from weave import Model, Evaluation
 from openai import OpenAI
 import asyncio
 from pydantic import BaseModel
@@ -141,5 +141,5 @@ SYSTEM_PROMPT = prompt_dataset.messages[0].get('content')
 USER_PROMPT = prompt_dataset.messages[1].get('content')
 
 model = eval(f"{class_name}")(predict_model_name=config['predict_model_name'])
-evaluation = weave.Evaluation(dataset=dataset, scorers=[evaluate])
+evaluation = Evaluation(dataset=dataset, scorers=[evaluate])
 asyncio.run(evaluation.evaluate(model))
