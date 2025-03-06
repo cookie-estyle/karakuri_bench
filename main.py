@@ -1,6 +1,5 @@
 import weave
 import re
-import tomli
 from weave import Model, Evaluation
 from openai import OpenAI
 import asyncio
@@ -11,8 +10,21 @@ from dotenv import load_dotenv
 import os
 
 load_dotenv(override=True)
-with open("config.toml", "rb") as f:
-    config = tomli.load(f)
+
+# weave
+PROJECT = 'karakuri-bench/weave-test2'
+DATASET_REF = 'karakuri-bench-dataset:latest'
+EVALUATE_PROMPT_REF = 'evaluate_prompt:latest'
+
+# model
+API_TYPE = 'openai' # 'openai', 'bedrock', 'google'
+PREDICT_MODEL_NAME = 'gpt-4o-mini-2024-07-18'
+EVALUATE_MODEL_NAME = 'gpt-4o-2024-11-20'
+
+# execution
+MAX_RETRY_COUNT = 5
+INITIAL_RETRY_DELAY = 5
+MAX_RETRY_DELAY = 30
 
 class EvaluationResult(BaseModel):
     response_text: str
@@ -20,12 +32,8 @@ class EvaluationResult(BaseModel):
     score: int | None
     retries: int = 0
 
-class_name = config['predict_model_name'].replace('-', '_').replace('.', '_').replace(':','_')
-model_template = ModelTemplate.get_template(
-    config['api_type'],
-    config['predict_model_name'],
-    class_name
-)
+class_name = PREDICT_MODEL_NAME.replace('-', '_').replace('.', '_').replace(':','_')
+model_template = ModelTemplate.get_template(API_TYPE, PREDICT_MODEL_NAME, class_name)
 exec(model_template)
 
 @weave.op()
@@ -72,11 +80,11 @@ async def evaluate(
         answer=output['answer'],
     ).strip()
 
-    for attempt in range(config['max_retries']):
+    for attempt in range(MAX_RETRY_COUNT):
         try:
             try:
                 response = client.chat.completions.create(
-                    model=config['evaluate_model_name'],
+                    model=EVALUATE_MODEL_NAME,
                     messages=[
                         {"role": "system", "content": SYSTEM_PROMPT.strip()},
                         {"role": "user", "content": user_prompt},
@@ -110,15 +118,12 @@ async def evaluate(
                 last_error = e
 
         except Exception as e:
-            print(f"Evaluation error (attempt {attempt + 1}/{config['max_retries']}): {str(e)}")
+            print(f"Evaluation error (attempt {attempt + 1}/{MAX_RETRY_COUNT}): {str(e)}")
             last_error = e
 
         retries += 1
-        if attempt < config['max_retries'] - 1:
-            delay = min(
-                config['max_retry_delay'],
-                config['initial_retry_delay'] * (2 ** attempt)
-            )
+        if attempt < MAX_RETRY_COUNT - 1:
+            delay = min(MAX_RETRY_DELAY, INITIAL_RETRY_DELAY * (2 ** attempt))
             await asyncio.sleep(delay)
 
     return {
@@ -131,14 +136,15 @@ async def evaluate(
         "retries": retries
     }
 
-weave.init(config['project'])
+weave.init(PROJECT)
 
-dataset = weave.ref(config['dataset_ref']).get()
+dataset = weave.ref(DATASET_REF).get()
+dataset = [{key: value for key, value in row.items()} for row in dataset.rows]
 
-prompt_dataset = weave.ref(config['evaluate_prompt_ref']).get()
+prompt_dataset = weave.ref(EVALUATE_PROMPT_REF).get()
 SYSTEM_PROMPT = prompt_dataset.messages[0].get('content')
 USER_PROMPT = prompt_dataset.messages[1].get('content')
 
-model = eval(f"{class_name}")(predict_model_name=config['predict_model_name'])
+model = eval(f"{class_name}")(predict_model_name=PREDICT_MODEL_NAME)
 evaluation = Evaluation(dataset=dataset, scorers=[evaluate])
 asyncio.run(evaluation.evaluate(model))
