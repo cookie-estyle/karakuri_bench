@@ -134,7 +134,6 @@ async def evaluate(
 weave.init(config['project'])
 
 dataset = weave.ref(config['dataset_ref']).get()
-dataset = [{key: value for key, value in row.items()} for row in dataset.rows]
 
 prompt_dataset = weave.ref(config['evaluate_prompt_ref']).get()
 SYSTEM_PROMPT = prompt_dataset.messages[0].get('content')
