@@ -32,10 +32,6 @@ class EvaluationResult(BaseModel):
     score: int | None
     retries: int = 0
 
-class_name = PREDICT_MODEL_NAME.replace('-', '_').replace('.', '_').replace(':','_')
-model_template = ModelTemplate.get_template(API_TYPE, PREDICT_MODEL_NAME, class_name)
-exec(model_template)
-
 @weave.op()
 async def evaluate(
     output,
@@ -137,6 +133,10 @@ async def evaluate(
     }
 
 weave.init(PROJECT)
+
+class_name = PREDICT_MODEL_NAME.replace('-', '_').replace('.', '_').replace(':','_')
+model_template = ModelTemplate.get_template(API_TYPE, PREDICT_MODEL_NAME, class_name)
+exec(model_template)
 
 dataset = weave.ref(DATASET_REF).get()
 dataset = [{key: value for key, value in row.items()} for row in dataset.rows]
