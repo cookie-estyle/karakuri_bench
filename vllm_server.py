@@ -12,21 +12,8 @@ from pathlib import Path
 import json
 
 def start_vllm_server(model_id):
-    api = HfApi()
-    tokenizer_config = api.hf_hub_download(
-        repo_id=model_id,
-        filename="tokenizer_config.json",
-        revision="main",
-        use_auth_token=os.getenv("HUGGINGFACE_API_KEY"),
-    )
-    with Path(tokenizer_config).open("r") as f:
-        tokenizer_config = json.load(f)
+    chat_template: str = get_chat_template(model_id)
 
-    chat_template: str = tokenizer_config.get("chat_template", None)
-
-    if chat_template is None:
-        raise ValueError("chat_template is None. Please provide a valid chat_template in the configuration.")
-    
     available_gpus = torch.cuda.device_count()
 
     with tempfile.NamedTemporaryFile(delete=False, mode='w', encoding='utf-8') as temp_file:
@@ -90,3 +77,73 @@ def start_vllm_server(model_id):
         except requests.ConnectionError:
             print("Failed to connect to the server. Retrying...")
         time.sleep(10)  # 待機してから再試行
+
+def stop_vllm_server():
+    pid_file = Path('vllm_server.pid')
+    if pid_file.exists():
+        with pid_file.open('r') as f:
+            pid = int(f.read().strip())
+        try:
+            os.kill(pid, signal.SIGTERM)
+            print(f"Sent SIGTERM to vLLM server process {pid}")
+            # ファイルを削除
+            pid_file.unlink()
+        except ProcessLookupError:
+            print(f"Process {pid} not found")
+        except Exception as e:
+            print(f"Error stopping vLLM server: {e}")
+
+def get_chat_template(model_id):
+    """
+    モデルのchat_templateを取得する関数
+    指定の方法でchat_templateが取得できない場合はエラーを発生させる
+    
+    Args:
+        model_id (str): Hugging Face モデルID
+        
+    Returns:
+        str: 処理済みのchat_template
+        
+    Raises:
+        ValueError: chat_templateが見つからない、または無効な形式の場合
+    """
+    api = HfApi()
+    
+    tokenizer_config = api.hf_hub_download(
+        repo_id=model_id,
+        filename="tokenizer_config.json",
+        revision="main",
+        use_auth_token=os.getenv("HUGGING_FACE_HUB_TOKEN"),
+    )
+    
+    with Path(tokenizer_config).open("r") as f:
+        tokenizer_config = json.load(f)
+    
+    chat_template = tokenizer_config.get("chat_template", None)
+    
+    if chat_template is None:
+        raise ValueError(f"No chat_template found for model {model_id}")
+    
+    # chat_templateの処理
+    if isinstance(chat_template, list):
+        # リストの場合、"default"という名前の要素を探す
+        default_found = False
+        for template_obj in chat_template:
+            if isinstance(template_obj, dict):
+                if template_obj.get("name") == "default" and "template" in template_obj:
+                    chat_template = template_obj.get("template")
+                    default_found = True
+                    break
+        
+        # defaultが見つからなければ最初の要素を使用
+        if not default_found and len(chat_template) > 0:
+            if isinstance(chat_template[0], dict) and "template" in chat_template[0]:
+                chat_template = chat_template[0].get("template")
+            else:
+                raise ValueError(f"Invalid chat_template format for model {model_id}: first item in list is not a valid template object")
+    
+    # 最終的にchat_templateが文字列でない場合はエラー
+    if not isinstance(chat_template, str):
+        raise ValueError(f"Invalid chat_template format for model {model_id}: not a string")
+    
+    return chat_template

@@ -8,7 +8,7 @@ from predictor import ModelTemplate
 from pydantic import BaseModel, PrivateAttr
 from dotenv import load_dotenv
 import os
-from vllm_server import start_vllm_server
+from vllm_server import start_vllm_server, stop_vllm_server
 
 load_dotenv(override=True)
 
@@ -17,9 +17,16 @@ PROJECT = 'karakuri-bench/weave-test2'
 DATASET_REF = 'karakuri-bench-dataset:latest'
 EVALUATE_PROMPT_REF = 'evaluate_prompt:latest'
 
-# model
-API_TYPE = 'vllm' # 'openai', 'bedrock', 'google', 'vllm'
-PREDICT_MODEL_NAME = 'gpt-4o-mini-2024-07-18'
+# evaluate model list
+MODELS_TO_EVALUATE = [
+    {'api_type': 'vllm', 'model_name': 'Qwen/Qwen2.5-7B-Instruct-1M'},
+    {'api_type': 'vllm', 'model_name': 'tokyotech-llm/Llama-3.1-Swallow-8B-Instruct-v0.2'},
+    {'api_type': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18'},
+    {'api_type': 'google', 'model_name': 'gemini-2.0-flash'},
+    {'api_type': 'bedrock', 'model_name': 'amazon.nova-pro-v1:0'},
+]
+
+# evaluation
 EVALUATE_MODEL_NAME = 'gpt-4o-2024-11-20'
 
 # execution
@@ -132,20 +139,49 @@ async def evaluate(
         "retries": retries
     }
 
-weave.init(PROJECT)
+async def evaluate_all_models():
+    weave.init(PROJECT)
+    
+    dataset = weave.ref(DATASET_REF).get()
+    dataset = [{key: value for key, value in row.items()} for row in dataset.rows]
+    
+    prompt_dataset = weave.ref(EVALUATE_PROMPT_REF).get()
+    global SYSTEM_PROMPT, USER_PROMPT
+    SYSTEM_PROMPT = prompt_dataset.messages[0].get('content')
+    USER_PROMPT = prompt_dataset.messages[1].get('content')
+    
+    results = {}
+    
+    for model_config in MODELS_TO_EVALUATE:
+        api_type = model_config['api_type']
+        model_name = model_config['model_name']
+        
+        print(f"Evaluating model: {model_name} with API type: {api_type}")
+        
+        # vLLM サーバーの起動（必要な場合）
+        if api_type == 'vllm':
+            start_vllm_server(model_name)
+        
+        # モデルクラスの作成
+        class_name = model_name.replace('-', '_').replace('.', '_').replace(':','_').replace('/','_')
+        model_template = ModelTemplate.get_template(api_type, model_name, class_name)
+        exec(model_template, globals())
+        
+        # モデルのインスタンス化
+        model = eval(f"{class_name}")(predict_model_name=model_name)
+        
+        # 評価の実行
+        evaluation = Evaluation(dataset=dataset, scorers=[evaluate])
+        result = await evaluation.evaluate(model)
+        
+        # 結果の保存
+        results[f"{api_type}_{model_name}"] = result
+        
+        # vLLM サーバーの停止（必要な場合）
+        if api_type == 'vllm':
+            stop_vllm_server()
+        
+    return results
 
-    start_vllm_server(PREDICT_MODEL_NAME)
-class_name = PREDICT_MODEL_NAME.replace('-', '_').replace('.', '_').replace(':','_').replace('/','_')
-model_template = ModelTemplate.get_template(API_TYPE, PREDICT_MODEL_NAME, class_name)
-exec(model_template)
-
-dataset = weave.ref(DATASET_REF).get()
-dataset = [{key: value for key, value in row.items()} for row in dataset.rows]
-
-prompt_dataset = weave.ref(EVALUATE_PROMPT_REF).get()
-SYSTEM_PROMPT = prompt_dataset.messages[0].get('content')
-USER_PROMPT = prompt_dataset.messages[1].get('content')
-
-model = eval(f"{class_name}")(predict_model_name=PREDICT_MODEL_NAME)
-evaluation = Evaluation(dataset=dataset, scorers=[evaluate])
-asyncio.run(evaluation.evaluate(model))
+if __name__ == "__main__":
+    asyncio.run(evaluate_all_models())
