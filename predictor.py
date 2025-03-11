@@ -1,10 +1,3 @@
-from typing import Dict
-import json
-import os
-import boto3
-from botocore.config import Config
-from pydantic import BaseModel
-
 class ModelTemplate:
     @classmethod
     def get_template(cls, api_type: str, model_name: str, class_name: str) -> str:
