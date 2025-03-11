@@ -8,6 +8,7 @@ from predictor import ModelTemplate
 from pydantic import BaseModel, PrivateAttr
 from dotenv import load_dotenv
 import os
+from vllm_server import start_vllm_server
 
 load_dotenv(override=True)
 
@@ -17,7 +18,7 @@ DATASET_REF = 'karakuri-bench-dataset:latest'
 EVALUATE_PROMPT_REF = 'evaluate_prompt:latest'
 
 # model
-API_TYPE = 'openai' # 'openai', 'bedrock', 'google'
+API_TYPE = 'vllm' # 'openai', 'bedrock', 'google', 'vllm'
 PREDICT_MODEL_NAME = 'gpt-4o-mini-2024-07-18'
 EVALUATE_MODEL_NAME = 'gpt-4o-2024-11-20'
 
@@ -41,7 +42,6 @@ async def evaluate(
     example_answer=None,
     marking_scheme=None,
 ) -> EvaluationResult:
-    print(f"Evaluating {index}/{len(dataset)}: {category}")
 
     if output is None:
         return {
@@ -134,7 +134,8 @@ async def evaluate(
 
 weave.init(PROJECT)
 
-class_name = PREDICT_MODEL_NAME.replace('-', '_').replace('.', '_').replace(':','_')
+    start_vllm_server(PREDICT_MODEL_NAME)
+class_name = PREDICT_MODEL_NAME.replace('-', '_').replace('.', '_').replace(':','_').replace('/','_')
 model_template = ModelTemplate.get_template(API_TYPE, PREDICT_MODEL_NAME, class_name)
 exec(model_template)
 

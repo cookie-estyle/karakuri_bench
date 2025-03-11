@@ -18,6 +18,9 @@ class ModelTemplate:
             },
             "google": {
                 "standard": cls._get_google_template
+            },
+            "vllm": {
+                "standard": cls._get_vllm_template
             }
         }
         
@@ -123,15 +126,6 @@ class {class_name}(Model):
     @staticmethod
     def _get_bedrock_template(class_name: str) -> str:
         return f'''
-import json
-import os
-import boto3
-import time
-import random
-from botocore.config import Config
-from pydantic import BaseModel, PrivateAttr
-from tenacity import retry, stop_after_attempt, wait_exponential
-
 class {class_name}(Model):
     predict_model_name: str
     _bedrock_runtime: object = PrivateAttr(default=None)
@@ -257,4 +251,31 @@ class {class_name}(Model):
         except Exception as e:
             print(f"Prediction error: {{str(e)}}")
             return {{"answer": f"Error: {{str(e)}}", "question": question}}
+'''
+
+    @staticmethod
+    def _get_vllm_template(class_name: str) -> str:
+        return f'''
+class {class_name}(Model):
+    predict_model_name: str
+
+    @weave.op()
+    def predict(self, question: str) -> dict:
+        client = OpenAI(
+            api_key="EMPTY",
+            base_url="http://localhost:8000/v1",
+        )
+        try:
+            response = client.chat.completions.create(
+                model=self.predict_model_name,
+                messages=[{{"role": "user", "content": question}}],
+                temperature=0.0,
+                max_tokens=1024,
+                response_format={{"type": "text"}},
+            )
+            answer = response.choices[0].message.content
+            return {{'answer': answer, 'question': question}}
+        except Exception as e:
+            print(f"Prediction error: {{str(e)}}")
+            raise
 '''
