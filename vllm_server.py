@@ -37,6 +37,7 @@ def start_vllm_server(model_id):
             "--disable-log-stats",
             "--disable-log-requests",
             "--revision", "main",
+            "--trust-remote-code", 
         ]
 
         process = subprocess.Popen(command)
