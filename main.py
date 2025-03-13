@@ -28,14 +28,12 @@ EVALUATE_PROMPT_REF = 'evaluate_prompt:latest'
 
 # evaluate model list
 MODELS_TO_EVALUATE = [
-    {'api_type': 'vllm', 'model_name': 'google/gemma-3-1b-it'},
-    # {'api_type': 'vllm', 'model_name': 'llm-jp/llm-jp-3-7.2b-instruct3'},
-    # {'api_type': 'vllm', 'model_name': 'meta-llama/Meta-Llama-3.2-3B-Instruct'},
-    # {'api_type': 'vllm', 'model_name': 'Qwen/Qwen2.5-7B-Instruct-1M'},
-    # {'api_type': 'vllm', 'model_name': 'stabilityai/japanese-stablelm-instruct-beta-7b'},
-    # {'api_type': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18'},
-    # {'api_type': 'google', 'model_name': 'gemini-2.0-flash'},
-    # {'api_type': 'bedrock', 'model_name': 'amazon.nova-pro-v1:0'},
+    {'api_type': 'vllm', 'model_name': 'microsoft/Phi-4-mini-instruct'},
+    {'api_type': 'vllm', 'model_name': 'llm-jp/llm-jp-3-7.2b-instruct3'},
+    {'api_type': 'vllm', 'model_name': 'Qwen/Qwen2.5-7B-Instruct-1M'},
+    {'api_type': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18'},
+    {'api_type': 'google', 'model_name': 'gemini-2.0-flash'},
+    {'api_type': 'bedrock', 'model_name': 'amazon.nova-pro-v1:0'},
 ]
 
 # evaluation
