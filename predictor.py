@@ -80,6 +80,17 @@ class {class_name}(Model):
         return f'''
 class {class_name}(Model):
     predict_model_name: str
+    _last_request_time: float = PrivateAttr(default=0)
+    _min_request_interval: float = PrivateAttr(default=5.0)  # 最小リクエスト間隔（秒）
+
+    def _wait_for_rate_limit(self):
+        current_time = time.time()
+        time_since_last_request = current_time - self._last_request_time
+        if time_since_last_request < self._min_request_interval:
+            sleep_time = self._min_request_interval - time_since_last_request
+            sleep_time += random.uniform(0, 0.5)
+            time.sleep(sleep_time)
+        self._last_request_time = time.time()
 
     @weave.op()
     def predict(self, question: str) -> dict:
@@ -87,33 +98,47 @@ class {class_name}(Model):
         from google.generativeai.types import HarmCategory, HarmBlockThreshold
         import os
 
-        try:
-            # 安全性設定の構成
-            categories = [
-                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                HarmCategory.HARM_CATEGORY_HARASSMENT,
-                HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-            ]
-            safety_settings = {{cat: HarmBlockThreshold.BLOCK_NONE for cat in categories}}
+        max_retries = 5
+        base_delay = 4
+        max_delay = 60
+        
+        for attempt in range(max_retries):
+            try:
+                # レート制限のための待機
+                self._wait_for_rate_limit()
+                
+                # 安全性設定の構成
+                categories = [
+                    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                    HarmCategory.HARM_CATEGORY_HARASSMENT,
+                    HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                ]
+                safety_settings = {{cat: HarmBlockThreshold.BLOCK_NONE for cat in categories}}
 
-            # モデルの初期化
-            llm = ChatGoogleGenerativeAI(
-                model=self.predict_model_name,
-                api_key=os.environ["GOOGLE_API_KEY"],
-                safety_settings=safety_settings,
-                temperature=0.0,
-            )
+                # モデルの初期化
+                llm = ChatGoogleGenerativeAI(
+                    model=self.predict_model_name,
+                    api_key=os.environ["GOOGLE_API_KEY"],
+                    safety_settings=safety_settings,
+                    temperature=0.0,
+                )
 
-            # 予測の実行
-            response = llm.invoke(question)
-            answer = response.content
-
-            return {{'answer': answer, 'question': question}}
-
-        except Exception as e:
-            print(f"Prediction error: {{str(e)}}")
-            return {{'answer': f"Error: {{str(e)}}", 'question': question}}
+                # 予測の実行
+                response = llm.invoke(question)
+                answer = response.content
+                
+                return {{'answer': answer, 'question': question}}
+                
+            except Exception as e:
+                print(f"Attempt {{attempt+1}}/{{max_retries}} failed: {{str(e)}}")
+                if attempt < max_retries - 1:  # 最後の試行でなければリトライ
+                    delay = min(max_delay, base_delay * (2 ** attempt))
+                    print(f"Retrying in {{delay}} seconds...")
+                    time.sleep(delay)
+                else:
+                    print("All retry attempts failed")
+                    return {{'answer': f"Error after {{max_retries}} attempts: {{str(e)}}", 'question': question}}
 '''
 
     @staticmethod
