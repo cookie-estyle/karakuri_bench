@@ -476,15 +476,37 @@ class {class_name}(Model):
     def predict(self, question: str) -> dict:
         try:
             body_dict = {{
-                "prompt": question,
-                "maxTokens": 1024,
-                **self._generator_config,
+                "messages": [
+                    {{
+                        "role": "user",
+                        "content": question
+                    }}
+                ],
+                "max_tokens": 1024,
+                "temperature": self._generator_config.get("temperature", 0.0),
+                "top_p": self._generator_config.get("top_p", 1.0),
+                "n": 1
             }}
-
+            
             try:
                 response = self._invoke_model(body_dict)
                 response_body = json.loads(response.get("body").read())
-                answer = response_body.get("completions", [{{}}])[0].get("data", {{}}).get("text", "")
+                
+                if "choices" in response_body and len(response_body["choices"]) > 0:
+                    message = response_body["choices"][0].get("message", {{}})
+                    if "content" in message:
+                        answer = message["content"]
+                    else:
+                        answer = str(message)
+                elif "output" in response_body and "message" in response_body["output"]:
+                    answer = response_body["output"]["message"]["content"]
+                elif "message" in response_body:
+                    answer = response_body["message"]["content"]
+                elif "content" in response_body:
+                    answer = response_body["content"]
+                else:
+                    answer = str(response_body)
+                
                 return {{"answer": answer, "question": question}}
                 
             except Exception as e:
@@ -492,6 +514,9 @@ class {class_name}(Model):
                     print(f"Rate limit exceeded, retrying with backoff: {{str(e)}}")
                     raise
                 else:
+                    print(f"Error processing response: {{str(e)}}")
+                    print(f"Model ID: {{self.predict_model_name}}")
+                    print(f"Request body: {{json.dumps(body_dict, indent=2)}}")
                     raise
                 
         except Exception as e:
@@ -507,7 +532,7 @@ class {class_name}(Model):
     _bedrock_runtime: object = PrivateAttr(default=None)
     _generator_config: dict = PrivateAttr(default={{"temperature": 0.0}})
     _last_request_time: float = PrivateAttr(default=0)
-    _min_request_interval: float = PrivateAttr(default=1.0)  # 最小リクエスト間隔（秒）
+    _min_request_interval: float = PrivateAttr(default=1.0)
     
 {ModelTemplate._get_bedrock_common_methods()}
 
