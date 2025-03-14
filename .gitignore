@@ -2,5 +2,4 @@
 wandb
 __pycache__
 .env
-config.toml
 *.pid
