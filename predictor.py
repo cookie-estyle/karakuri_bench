@@ -7,7 +7,13 @@ class ModelTemplate:
                 "o_series": cls._get_openai_o_series_template
             },
             "bedrock": {
-                "standard": cls._get_bedrock_template
+                "amazon_nova": cls._get_bedrock_amazon_nova_template,
+                "anthropic": cls._get_bedrock_anthropic_template,
+                "llama": cls._get_bedrock_llama_template,
+                "mistral": cls._get_bedrock_mistral_template,
+                "amazon_titan": cls._get_bedrock_amazon_titan_template,
+                "ai21": cls._get_bedrock_ai21_template,
+                "standard": cls._get_bedrock_standard_template
             },
             "google": {
                 "standard": cls._get_google_template
@@ -18,7 +24,21 @@ class ModelTemplate:
         }
         
         if api_type == "bedrock":
-            template_type = "standard"
+            model_id = model_name.lower()
+            if "amazon.nova" in model_id:
+                template_type = "amazon_nova"
+            elif "anthropic" in model_id:
+                template_type = "anthropic"
+            elif "llama" in model_id:
+                template_type = "llama"
+            elif "mistral" in model_id:
+                template_type = "mistral"
+            elif "amazon.titan" in model_id:
+                template_type = "amazon_titan"
+            elif "ai21" in model_id:
+                template_type = "ai21"
+            else:
+                template_type = "standard"
         elif api_type == "google":
             template_type = "standard"
         else:
@@ -142,7 +162,40 @@ class {class_name}(Model):
 '''
 
     @staticmethod
-    def _get_bedrock_template(class_name: str) -> str:
+    def _get_bedrock_common_methods() -> str:
+        return '''
+    def __init__(self, **data):
+        super().__init__(**data)
+        self._bedrock_runtime = boto3.client(
+            service_name="bedrock-runtime",
+            region_name=os.environ.get("AWS_DEFAULT_REGION", "us-west-2"),
+            config=Config(read_timeout=1000),
+        )
+
+    def _wait_for_rate_limit(self):
+        current_time = time.time()
+        time_since_last_request = current_time - self._last_request_time
+        if time_since_last_request < self._min_request_interval:
+            sleep_time = self._min_request_interval - time_since_last_request
+            sleep_time += random.uniform(0, 0.1)
+            time.sleep(sleep_time)
+        self._last_request_time = time.time()
+
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=4, max=30),
+        reraise=True
+    )
+    def _invoke_model(self, body_dict):
+        self._wait_for_rate_limit()
+        return self._bedrock_runtime.invoke_model(
+            body=json.dumps(body_dict),
+            modelId=self.predict_model_name
+        )
+'''
+
+    @staticmethod
+    def _get_bedrock_amazon_nova_template(class_name: str) -> str:
         return f'''
 class {class_name}(Model):
     predict_model_name: str
@@ -151,13 +204,103 @@ class {class_name}(Model):
     _last_request_time: float = PrivateAttr(default=0)
     _min_request_interval: float = PrivateAttr(default=1.0)  # 最小リクエスト間隔（秒）
     
-    def __init__(self, **data):
-        super().__init__(**data)
-        self._bedrock_runtime = boto3.client(
-            service_name="bedrock-runtime",
-            region_name=os.environ.get("AWS_DEFAULT_REGION", "us-west-2"),
-            config=Config(read_timeout=1000),
-        )
+{ModelTemplate._get_bedrock_common_methods()}
+
+    @weave.op()
+    def predict(self, question: str) -> dict:
+        try:
+            body_dict = {{
+                "messages": [
+                    {{
+                        "role": "user",
+                        "content": [
+                            {{
+                                "text": question
+                            }}
+                        ]
+                    }}
+                ]
+            }}
+
+            try:
+                response = self._invoke_model(body_dict)
+                response_body = json.loads(response.get("body").read())
+                answer = response_body.get("output", {{}}).get("message", {{}}).get("content", [{{}}])[0].get("text", "")
+                return {{"answer": answer, "question": question}}
+                
+            except Exception as e:
+                if "ThrottlingException" in str(e):
+                    print(f"Rate limit exceeded, retrying with backoff: {{str(e)}}")
+                    raise  # リトライロジックによって処理される
+                else:
+                    raise  # その他のエラーは上位で処理
+                
+        except Exception as e:
+            print(f"Prediction error: {{str(e)}}")
+            return {{"answer": f"Error: {{str(e)}}", "question": question}}
+'''
+
+    @staticmethod
+    def _get_bedrock_anthropic_template(class_name: str) -> str:
+        return f'''
+class {class_name}(Model):
+    predict_model_name: str
+    _bedrock_runtime: object = PrivateAttr(default=None)
+    _generator_config: dict = PrivateAttr(default={{"temperature": 0.0, "top_p": 1.0}})
+    _last_request_time: float = PrivateAttr(default=0)
+    _min_request_interval: float = PrivateAttr(default=1.0)  # 最小リクエスト間隔（秒）
+    
+{ModelTemplate._get_bedrock_common_methods()}
+
+    @weave.op()
+    def predict(self, question: str) -> dict:
+        try:
+            body_dict = {{
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 1024,
+                "messages": [
+                    {{
+                        "role": "user",
+                        "content": [
+                            {{
+                                "type": "text",
+                                "text": question
+                            }}
+                        ]
+                    }}
+                ],
+                **self._generator_config,
+            }}
+
+            try:
+                response = self._invoke_model(body_dict)
+                response_body = json.loads(response.get("body").read())
+                answer = response_body.get("content")[0].get("text", "")
+                return {{"answer": answer, "question": question}}
+                
+            except Exception as e:
+                if "ThrottlingException" in str(e):
+                    print(f"Rate limit exceeded, retrying with backoff: {{str(e)}}")
+                    raise  # リトライロジックによって処理される
+                else:
+                    raise  # その他のエラーは上位で処理
+                
+        except Exception as e:
+            print(f"Prediction error: {{str(e)}}")
+            return {{"answer": f"Error: {{str(e)}}", "question": question}}
+'''
+
+    @staticmethod
+    def _get_bedrock_llama_template(class_name: str) -> str:
+        return f'''
+class {class_name}(Model):
+    predict_model_name: str
+    _bedrock_runtime: object = PrivateAttr(default=None)
+    _generator_config: dict = PrivateAttr(default={{"temperature": 0.0, "top_p": 1.0}})
+    _last_request_time: float = PrivateAttr(default=0)
+    _min_request_interval: float = PrivateAttr(default=1.0)  # 最小リクエスト間隔（秒）
+    
+{ModelTemplate._get_bedrock_common_methods()}
 
     def _format_llama_prompt(self, messages):
         formatted_prompt = "<|begin_of_text|>"
@@ -186,104 +329,205 @@ class {class_name}(Model):
             
         return formatted_prompt
 
-    def _wait_for_rate_limit(self):
-        current_time = time.time()
-        time_since_last_request = current_time - self._last_request_time
-        if time_since_last_request < self._min_request_interval:
-            sleep_time = self._min_request_interval - time_since_last_request
-            sleep_time += random.uniform(0, 0.1)
-            time.sleep(sleep_time)
-        self._last_request_time = time.time()
+    @weave.op()
+    def predict(self, question: str) -> dict:
+        try:
+            prompt = self._format_llama_prompt([{{"role": "user", "content": question}}])
+            body_dict = {{
+                "prompt": prompt,
+                "max_gen_len": 1024,
+                **self._generator_config,
+            }}
 
-    @retry(
-        stop=stop_after_attempt(5),
-        wait=wait_exponential(multiplier=1, min=4, max=30),
-        reraise=True
-    )
-    def _invoke_model(self, body_dict):
-        self._wait_for_rate_limit()
-        return self._bedrock_runtime.invoke_model(
-            body=json.dumps(body_dict),
-            modelId=self.predict_model_name
-        )
+            try:
+                response = self._invoke_model(body_dict)
+                response_body = json.loads(response.get("body").read())
+                answer = response_body.get("generation", "")
+                return {{"answer": answer, "question": question}}
+                
+            except Exception as e:
+                if "ThrottlingException" in str(e):
+                    print(f"Rate limit exceeded, retrying with backoff: {{str(e)}}")
+                    raise  # リトライロジックによって処理される
+                else:
+                    raise  # その他のエラーは上位で処理
+                
+        except Exception as e:
+            print(f"Prediction error: {{str(e)}}")
+            return {{"answer": f"Error: {{str(e)}}", "question": question}}
+'''
+
+    @staticmethod
+    def _get_bedrock_mistral_template(class_name: str) -> str:
+        return f'''
+class {class_name}(Model):
+    predict_model_name: str
+    _bedrock_runtime: object = PrivateAttr(default=None)
+    _generator_config: dict = PrivateAttr(default={{"temperature": 0.0, "top_p": 1.0}})
+    _last_request_time: float = PrivateAttr(default=0)
+    _min_request_interval: float = PrivateAttr(default=1.0)  # 最小リクエスト間隔（秒）
+    
+{ModelTemplate._get_bedrock_common_methods()}
+
+    def _format_mistral_prompt(self, messages):
+        formatted_messages = []
+        
+        # システムメッセージがあれば最初に追加
+        system_message = next((msg for msg in messages if msg["role"] == "system"), None)
+        if system_message:
+            formatted_messages.append({{"role": "system", "content": system_message["content"]}})
+        
+        # ユーザーとアシスタントのメッセージを追加
+        for message in messages:
+            if message["role"] != "system":  # システムメッセージは既に処理済み
+                formatted_messages.append({{"role": message["role"], "content": message["content"]}})
+        
+        return formatted_messages
 
     @weave.op()
     def predict(self, question: str) -> dict:
         try:
-            # モデルタイプの判定
-            model_id = self.predict_model_name.lower()
-            
-            if "amazon.nova" in model_id:
-                body_dict = {{
-                    "messages": [
-                        {{
-                            "role": "user",
-                            "content": [
-                                {{
-                                    "text": question
-                                }}
-                            ]
-                        }}
-                    ]
+            messages = self._format_mistral_prompt([{{"role": "user", "content": question}}])
+            body_dict = {{
+                "messages": messages,
+                "max_tokens": 1024,
+                **self._generator_config,
+            }}
+
+            try:
+                response = self._invoke_model(body_dict)
+                response_body = json.loads(response.get("body").read())
+                answer = response_body.get("outputs", [{{}}])[0].get("text", "")
+                return {{"answer": answer, "question": question}}
+                
+            except Exception as e:
+                if "ThrottlingException" in str(e):
+                    print(f"Rate limit exceeded, retrying with backoff: {{str(e)}}")
+                    raise  # リトライロジックによって処理される
+                else:
+                    raise  # その他のエラーは上位で処理
+                
+        except Exception as e:
+            print(f"Prediction error: {{str(e)}}")
+            return {{"answer": f"Error: {{str(e)}}", "question": question}}
+'''
+
+    @staticmethod
+    def _get_bedrock_amazon_titan_template(class_name: str) -> str:
+        return f'''
+class {class_name}(Model):
+    predict_model_name: str
+    _bedrock_runtime: object = PrivateAttr(default=None)
+    _generator_config: dict = PrivateAttr(default={{"temperature": 0.0, "top_p": 1.0}})
+    _last_request_time: float = PrivateAttr(default=0)
+    _min_request_interval: float = PrivateAttr(default=1.0)  # 最小リクエスト間隔（秒）
+    
+{ModelTemplate._get_bedrock_common_methods()}
+
+    @weave.op()
+    def predict(self, question: str) -> dict:
+        try:
+            body_dict = {{
+                "inputText": question,
+                "textGenerationConfig": {{
+                    "maxTokenCount": 1024,
+                    "temperature": self._generator_config.get("temperature", 0.0),
+                    "topP": self._generator_config.get("top_p", 1.0)
                 }}
-            elif "anthropic" in model_id:
-                body_dict = {{
-                    "anthropic_version": "bedrock-2023-05-31",
-                    "max_tokens": 1024,
-                    "messages": [
-                        {{
-                            "role": "user",
-                            "content": [
-                                {{
-                                    "type": "text",
-                                    "text": question
-                                }}
-                            ]
-                        }}
-                    ],
-                    **self._generator_config,
-                }}
-            elif "llama" in model_id:
-                prompt = self._format_llama_prompt([{{"role": "user", "content": question}}])
-                body_dict = {{
-                    "prompt": prompt,
-                    "max_gen_len": 1024,
-                    **self._generator_config,
-                }}
-            elif "amazon.titan" in model_id:
-                body_dict = {{
-                    "inputText": question,
-                    "textGenerationConfig": {{
-                        "maxTokenCount": 1024,
-                        "temperature": self._generator_config.get("temperature", 0.0),
-                        "topP": self._generator_config.get("top_p", 1.0)
-                    }}
-                }}
-            elif "ai21" in model_id:
-                body_dict = {{
-                    "prompt": question,
-                    "maxTokens": 1024,
-                    **self._generator_config,
-                }}
-            else:
-                raise ValueError(f"Unsupported model: {{self.predict_model_name}}")
+            }}
+
+            try:
+                response = self._invoke_model(body_dict)
+                response_body = json.loads(response.get("body").read())
+                answer = response_body.get("results", [{{}}])[0].get("outputText", "")
+                return {{"answer": answer, "question": question}}
+                
+            except Exception as e:
+                if "ThrottlingException" in str(e):
+                    print(f"Rate limit exceeded, retrying with backoff: {{str(e)}}")
+                    raise  # リトライロジックによって処理される
+                else:
+                    raise  # その他のエラーは上位で処理
+                
+        except Exception as e:
+            print(f"Prediction error: {{str(e)}}")
+            return {{"answer": f"Error: {{str(e)}}", "question": question}}
+'''
+
+    @staticmethod
+    def _get_bedrock_ai21_template(class_name: str) -> str:
+        return f'''
+class {class_name}(Model):
+    predict_model_name: str
+    _bedrock_runtime: object = PrivateAttr(default=None)
+    _generator_config: dict = PrivateAttr(default={{"temperature": 0.0, "top_p": 1.0}})
+    _last_request_time: float = PrivateAttr(default=0)
+    _min_request_interval: float = PrivateAttr(default=1.0)  # 最小リクエスト間隔（秒）
+    
+{ModelTemplate._get_bedrock_common_methods()}
+
+    @weave.op()
+    def predict(self, question: str) -> dict:
+        try:
+            body_dict = {{
+                "prompt": question,
+                "maxTokens": 1024,
+                **self._generator_config,
+            }}
+
+            try:
+                response = self._invoke_model(body_dict)
+                response_body = json.loads(response.get("body").read())
+                answer = response_body.get("completions", [{{}}])[0].get("data", {{}}).get("text", "")
+                return {{"answer": answer, "question": question}}
+                
+            except Exception as e:
+                if "ThrottlingException" in str(e):
+                    print(f"Rate limit exceeded, retrying with backoff: {{str(e)}}")
+                    raise  # リトライロジックによって処理される
+                else:
+                    raise  # その他のエラーは上位で処理
+                
+        except Exception as e:
+            print(f"Prediction error: {{str(e)}}")
+            return {{"answer": f"Error: {{str(e)}}", "question": question}}
+'''
+
+    @staticmethod
+    def _get_bedrock_standard_template(class_name: str) -> str:
+        return f'''
+class {class_name}(Model):
+    predict_model_name: str
+    _bedrock_runtime: object = PrivateAttr(default=None)
+    _generator_config: dict = PrivateAttr(default={{"temperature": 0.0, "top_p": 1.0}})
+    _last_request_time: float = PrivateAttr(default=0)
+    _min_request_interval: float = PrivateAttr(default=1.0)  # 最小リクエスト間隔（秒）
+    
+{ModelTemplate._get_bedrock_common_methods()}
+
+    @weave.op()
+    def predict(self, question: str) -> dict:
+        try:
+            # デフォルトのリクエスト形式（モデルが特定できない場合）
+            body_dict = {{
+                "prompt": question,
+                "max_tokens": 1024,
+                **self._generator_config,
+            }}
 
             try:
                 response = self._invoke_model(body_dict)
                 response_body = json.loads(response.get("body").read())
                 
-                if "amazon.nova" in model_id:
-                    answer = response_body.get("output", {{}}).get("message", {{}}).get("content", [{{}}])[0].get("text", "")
-                elif "anthropic" in model_id:
-                    answer = response_body.get("content")[0].get("text", "")
-                elif "llama" in model_id:
+                # 一般的なレスポンス形式を試行
+                if "generation" in response_body:
                     answer = response_body.get("generation", "")
-                elif "amazon.titan" in model_id:
-                    answer = response_body.get("results", [{{}}])[0].get("outputText", "")
-                elif "ai21" in model_id:
-                    answer = response_body.get("completions", [{{}}])[0].get("data", {{}}).get("text", "")
+                elif "text" in response_body:
+                    answer = response_body.get("text", "")
+                elif "content" in response_body:
+                    answer = response_body.get("content", "")
                 else:
-                    answer = "Unsupported model response format"
+                    answer = str(response_body)  # 何も見つからない場合は全体を文字列化
                 
                 return {{"answer": answer, "question": question}}
                 
