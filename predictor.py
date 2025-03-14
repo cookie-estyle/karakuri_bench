@@ -159,6 +159,33 @@ class {class_name}(Model):
             config=Config(read_timeout=1000),
         )
 
+    def _format_llama_prompt(self, messages):
+        formatted_prompt = "<|begin_of_text|>"
+        
+        # システムメッセージがあれば最初に追加
+        system_message = next((msg for msg in messages if msg["role"] == "system"), None)
+        if system_message:
+            formatted_prompt += f"<|start_header_id|>system<|end_header_id|>\\n{{system_message['content']}}<|eot_id|>"
+        
+        # ユーザーとアシスタントのメッセージを追加
+        for message in messages:
+            if message["role"] == "system":
+                continue  # システムメッセージは既に処理済み
+            
+            role = message["role"]
+            content = message["content"]
+            
+            if role == "user":
+                formatted_prompt += f"<|start_header_id|>user<|end_header_id|>\\n{{content}}<|eot_id|>"
+            elif role == "assistant":
+                formatted_prompt += f"<|start_header_id|>assistant<|end_header_id|>\\n{{content}}<|eot_id|>"
+        
+        # 最後にアシスタントのヘッダーを追加して応答を促す
+        if not messages or messages[-1]["role"] != "assistant":
+            formatted_prompt += "<|start_header_id|>assistant<|end_header_id|>"
+            
+        return formatted_prompt
+
     def _wait_for_rate_limit(self):
         current_time = time.time()
         time_since_last_request = current_time - self._last_request_time
