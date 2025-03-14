@@ -18,6 +18,7 @@ import os
 import boto3
 from botocore.config import Config
 from pydantic import BaseModel
+from models import MODELS_TO_EVALUATE
 
 load_dotenv(override=True)
 
@@ -25,22 +26,6 @@ load_dotenv(override=True)
 PROJECT = 'karakuri-bench/karakuri-bench'
 DATASET_REF = 'karakuri-bench-dataset:latest'
 EVALUATE_PROMPT_REF = 'evaluate_prompt:latest'
-
-# evaluate model list
-MODELS_TO_EVALUATE = [
-    {'api_type': 'vllm', 'model_name': 'microsoft/Phi-4-mini-instruct'},
-    {'api_type': 'vllm', 'model_name': 'llm-jp/llm-jp-3-7.2b-instruct3'},
-    {'api_type': 'vllm', 'model_name': 'Qwen/Qwen2.5-7B-Instruct-1M'},
-    {'api_type': 'openai', 'model_name': 'gpt-4o-2024-08-06'},
-    {'api_type': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18'},
-    {'api_type': 'openai', 'model_name': 'o1-2024-12-17'},
-    {'api_type': 'openai', 'model_name': 'o3-mini-2025-01-31'},
-    {'api_type': 'openai', 'model_name': 'o1-mini-2024-09-12'},
-    {'api_type': 'google', 'model_name': 'gemini-2.0-flash'},
-    {'api_type': 'google', 'model_name': 'gemini-2.0-pro-exp-02-05'},
-    {'api_type': 'google', 'model_name': 'gemini-2.0-flash-thinking-exp-01-21'},
-    {'api_type': 'bedrock', 'model_name': 'amazon.nova-pro-v1:0'},
-]
 
 # evaluation
 EVALUATE_MODEL_NAME = 'gpt-4o-2024-08-06'
