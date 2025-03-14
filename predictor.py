@@ -13,6 +13,7 @@ class ModelTemplate:
                 "mistral": cls._get_bedrock_mistral_template,
                 "amazon_titan": cls._get_bedrock_amazon_titan_template,
                 "ai21": cls._get_bedrock_ai21_template,
+                "cohere": cls._get_bedrock_cohere_template, 
                 "standard": cls._get_bedrock_standard_template
             },
             "google": {
@@ -37,6 +38,8 @@ class ModelTemplate:
                 template_type = "amazon_titan"
             elif "ai21" in model_id:
                 template_type = "ai21"
+            elif "cohere" in model_id:
+                template_type = "cohere"
             else:
                 template_type = "standard"
         elif api_type == "google":
@@ -489,6 +492,67 @@ class {class_name}(Model):
                     print(f"Rate limit exceeded, retrying with backoff: {{str(e)}}")
                     raise
                 else:
+                    raise
+                
+        except Exception as e:
+            print(f"Prediction error: {{str(e)}}")
+            return {{"answer": f"Error: {{str(e)}}", "question": question}}
+'''
+
+    @staticmethod
+    def _get_bedrock_cohere_template(class_name: str) -> str:
+        return f'''
+class {class_name}(Model):
+    predict_model_name: str
+    _bedrock_runtime: object = PrivateAttr(default=None)
+    _generator_config: dict = PrivateAttr(default={{"temperature": 0.0}})
+    _last_request_time: float = PrivateAttr(default=0)
+    _min_request_interval: float = PrivateAttr(default=1.0)  # 最小リクエスト間隔（秒）
+    
+{ModelTemplate._get_bedrock_common_methods()}
+
+    @weave.op()
+    def predict(self, question: str) -> dict:
+        try:
+            model_id = self.predict_model_name.lower()
+            
+            if "command-r" in model_id:
+                body_dict = {{
+                    "message": question,
+                    "max_tokens": 1024,
+                    "temperature": self._generator_config.get("temperature", 0.0),
+                }}
+            else:
+                body_dict = {{
+                    "prompt": question,
+                    "max_tokens": 1024,
+                    "temperature": self._generator_config.get("temperature", 0.0),
+                }}
+            
+            try:
+                response = self._invoke_model(body_dict)
+                response_body = json.loads(response.get("body").read())
+                
+                if "generations" in response_body and len(response_body["generations"]) > 0:
+                    answer = response_body["generations"][0].get("text", "")
+                elif "text" in response_body:
+                    answer = response_body["text"]
+                elif "generation" in response_body:
+                    answer = response_body["generation"]
+                elif "response" in response_body:
+                    answer = response_body["response"]
+                else:
+                    answer = f"Response format unknown: {{json.dumps(response_body)}}"
+                
+                return {{"answer": answer, "question": question}}
+                
+            except Exception as e:
+                if "ThrottlingException" in str(e):
+                    print(f"Rate limit exceeded, retrying with backoff: {{str(e)}}")
+                    raise
+                else:
+                    print(f"Error processing response: {{str(e)}}")
+                    print(f"Request body: {{json.dumps(body_dict, indent=2)}}")
                     raise
                 
         except Exception as e:
