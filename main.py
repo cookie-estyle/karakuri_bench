@@ -22,7 +22,7 @@ from pydantic import BaseModel
 load_dotenv(override=True)
 
 # weave
-PROJECT = 'karakuri-bench/weave-test2'
+PROJECT = 'karakuri-bench/karakuri-bench'
 DATASET_REF = 'karakuri-bench-dataset:latest'
 EVALUATE_PROMPT_REF = 'evaluate_prompt:latest'
 

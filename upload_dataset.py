@@ -2,13 +2,14 @@ import weave
 from weave import Dataset
 import polars as pl
 from dotenv import load_dotenv
-import tomli
 
 load_dotenv(override=True)
-with open("config.toml", "rb") as f:
-    config = tomli.load(f)
 
-weave.init(config['project'])
+PROJECT = 'karakuri-bench/karakuri-bench'
+DATASET_REF = 'karakuri-bench-dataset:latest'
+EVALUATE_PROMPT_REF = 'evaluate_prompt:latest'
+
+weave.init(PROJECT)
 
 df = pl.read_csv('data/questions.csv')
 rows = df.to_dicts()
@@ -44,5 +45,5 @@ evaluation_prompt = weave.MessagesPrompt([
     }
 ])
 
-weave.publish(dataset, name=config['dataset_ref'].split(':')[0])
-weave.publish(evaluation_prompt, name=config['evaluate_prompt_ref'].split(':')[0])
+weave.publish(dataset, name=DATASET_REF.split(':')[0])
+weave.publish(evaluation_prompt, name=EVALUATE_PROMPT_REF.split(':')[0])
