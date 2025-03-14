@@ -165,6 +165,8 @@ async def evaluate_all_models():
         
         # モデルクラスの作成
         class_name = model_name.replace('-', '_').replace('.', '_').replace(':','_').replace('/','_')
+        if re.match(r'^\d', class_name):
+            class_name = f"_{class_name}"
         model_template = ModelTemplate.get_template(api_type, model_name, class_name)
         exec(model_template, globals())
         
