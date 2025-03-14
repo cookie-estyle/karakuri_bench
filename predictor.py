@@ -101,7 +101,7 @@ class {class_name}(Model):
 class {class_name}(Model):
     predict_model_name: str
     _last_request_time: float = PrivateAttr(default=0)
-    _min_request_interval: float = PrivateAttr(default=5.0)  # 最小リクエスト間隔（秒）
+    _min_request_interval: float = PrivateAttr(default=5.0)
 
     def _wait_for_rate_limit(self):
         current_time = time.time()
@@ -124,10 +124,8 @@ class {class_name}(Model):
         
         for attempt in range(max_retries):
             try:
-                # レート制限のための待機
                 self._wait_for_rate_limit()
                 
-                # 安全性設定の構成
                 categories = [
                     HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
                     HarmCategory.HARM_CATEGORY_HARASSMENT,
@@ -136,7 +134,6 @@ class {class_name}(Model):
                 ]
                 safety_settings = {{cat: HarmBlockThreshold.BLOCK_NONE for cat in categories}}
 
-                # モデルの初期化
                 llm = ChatGoogleGenerativeAI(
                     model=self.predict_model_name,
                     api_key=os.environ["GOOGLE_API_KEY"],
@@ -144,7 +141,6 @@ class {class_name}(Model):
                     temperature=0.0,
                 )
 
-                # 予測の実行
                 response = llm.invoke(question)
                 answer = response.content
                 
@@ -152,7 +148,7 @@ class {class_name}(Model):
                 
             except Exception as e:
                 print(f"Attempt {{attempt+1}}/{{max_retries}} failed: {{str(e)}}")
-                if attempt < max_retries - 1:  # 最後の試行でなければリトライ
+                if attempt < max_retries - 1:
                     delay = min(max_delay, base_delay * (2 ** attempt))
                     print(f"Retrying in {{delay}} seconds...")
                     time.sleep(delay)
@@ -202,7 +198,7 @@ class {class_name}(Model):
     _bedrock_runtime: object = PrivateAttr(default=None)
     _generator_config: dict = PrivateAttr(default={{"temperature": 0.0, "top_p": 1.0}})
     _last_request_time: float = PrivateAttr(default=0)
-    _min_request_interval: float = PrivateAttr(default=1.0)  # 最小リクエスト間隔（秒）
+    _min_request_interval: float = PrivateAttr(default=1.0)
     
 {ModelTemplate._get_bedrock_common_methods()}
 
@@ -231,9 +227,9 @@ class {class_name}(Model):
             except Exception as e:
                 if "ThrottlingException" in str(e):
                     print(f"Rate limit exceeded, retrying with backoff: {{str(e)}}")
-                    raise  # リトライロジックによって処理される
+                    raise
                 else:
-                    raise  # その他のエラーは上位で処理
+                    raise
                 
         except Exception as e:
             print(f"Prediction error: {{str(e)}}")
@@ -248,7 +244,7 @@ class {class_name}(Model):
     _bedrock_runtime: object = PrivateAttr(default=None)
     _generator_config: dict = PrivateAttr(default={{"temperature": 0.0, "top_p": 1.0}})
     _last_request_time: float = PrivateAttr(default=0)
-    _min_request_interval: float = PrivateAttr(default=1.0)  # 最小リクエスト間隔（秒）
+    _min_request_interval: float = PrivateAttr(default=1.0)
     
 {ModelTemplate._get_bedrock_common_methods()}
 
@@ -281,9 +277,9 @@ class {class_name}(Model):
             except Exception as e:
                 if "ThrottlingException" in str(e):
                     print(f"Rate limit exceeded, retrying with backoff: {{str(e)}}")
-                    raise  # リトライロジックによって処理される
+                    raise
                 else:
-                    raise  # その他のエラーは上位で処理
+                    raise
                 
         except Exception as e:
             print(f"Prediction error: {{str(e)}}")
@@ -298,22 +294,20 @@ class {class_name}(Model):
     _bedrock_runtime: object = PrivateAttr(default=None)
     _generator_config: dict = PrivateAttr(default={{"temperature": 0.0, "top_p": 1.0}})
     _last_request_time: float = PrivateAttr(default=0)
-    _min_request_interval: float = PrivateAttr(default=1.0)  # 最小リクエスト間隔（秒）
+    _min_request_interval: float = PrivateAttr(default=1.0)
     
 {ModelTemplate._get_bedrock_common_methods()}
 
     def _format_llama_prompt(self, messages):
         formatted_prompt = "<|begin_of_text|>"
         
-        # システムメッセージがあれば最初に追加
         system_message = next((msg for msg in messages if msg["role"] == "system"), None)
         if system_message:
             formatted_prompt += f"<|start_header_id|>system<|end_header_id|>\\n{{system_message['content']}}<|eot_id|>"
         
-        # ユーザーとアシスタントのメッセージを追加
         for message in messages:
             if message["role"] == "system":
-                continue  # システムメッセージは既に処理済み
+                continue
             
             role = message["role"]
             content = message["content"]
@@ -323,7 +317,6 @@ class {class_name}(Model):
             elif role == "assistant":
                 formatted_prompt += f"<|start_header_id|>assistant<|end_header_id|>\\n{{content}}<|eot_id|>"
         
-        # 最後にアシスタントのヘッダーを追加して応答を促す
         if not messages or messages[-1]["role"] != "assistant":
             formatted_prompt += "<|start_header_id|>assistant<|end_header_id|>"
             
@@ -348,9 +341,9 @@ class {class_name}(Model):
             except Exception as e:
                 if "ThrottlingException" in str(e):
                     print(f"Rate limit exceeded, retrying with backoff: {{str(e)}}")
-                    raise  # リトライロジックによって処理される
+                    raise
                 else:
-                    raise  # その他のエラーは上位で処理
+                    raise
                 
         except Exception as e:
             print(f"Prediction error: {{str(e)}}")
@@ -365,21 +358,19 @@ class {class_name}(Model):
     _bedrock_runtime: object = PrivateAttr(default=None)
     _generator_config: dict = PrivateAttr(default={{"temperature": 0.0, "top_p": 1.0}})
     _last_request_time: float = PrivateAttr(default=0)
-    _min_request_interval: float = PrivateAttr(default=1.0)  # 最小リクエスト間隔（秒）
+    _min_request_interval: float = PrivateAttr(default=1.0)
     
 {ModelTemplate._get_bedrock_common_methods()}
 
     def _format_mistral_prompt(self, messages):
         formatted_messages = []
         
-        # システムメッセージがあれば最初に追加
         system_message = next((msg for msg in messages if msg["role"] == "system"), None)
         if system_message:
             formatted_messages.append({{"role": "system", "content": system_message["content"]}})
         
-        # ユーザーとアシスタントのメッセージを追加
         for message in messages:
-            if message["role"] != "system":  # システムメッセージは既に処理済み
+            if message["role"] != "system":
                 formatted_messages.append({{"role": message["role"], "content": message["content"]}})
         
         return formatted_messages
@@ -387,25 +378,37 @@ class {class_name}(Model):
     @weave.op()
     def predict(self, question: str) -> dict:
         try:
-            messages = self._format_mistral_prompt([{{"role": "user", "content": question}}])
             body_dict = {{
-                "messages": messages,
+                "prompt": f"<s>[INST]{{question}}[/INST]",
                 "max_tokens": 1024,
-                **self._generator_config,
+                "temperature": 0.0,
+                "top_p": 1.0
             }}
 
             try:
                 response = self._invoke_model(body_dict)
                 response_body = json.loads(response.get("body").read())
-                answer = response_body.get("outputs", [{{}}])[0].get("text", "")
+                
+                if "outputs" in response_body and len(response_body["outputs"]) > 0:
+                    answer = response_body["outputs"][0].get("text", "")
+                else:
+                    answer = response_body.get("text", "")
+                    if not answer and "completion" in response_body:
+                        answer = response_body["completion"]
+                    elif not answer and "response" in response_body:
+                        answer = response_body["response"]
+                    elif not answer:
+                        answer = f"Response format unknown: {{json.dumps(response_body)}}"
+                
                 return {{"answer": answer, "question": question}}
                 
             except Exception as e:
                 if "ThrottlingException" in str(e):
                     print(f"Rate limit exceeded, retrying with backoff: {{str(e)}}")
-                    raise  # リトライロジックによって処理される
+                    raise
                 else:
-                    raise  # その他のエラーは上位で処理
+                    print(f"Error processing response: {{str(e)}}")
+                    raise
                 
         except Exception as e:
             print(f"Prediction error: {{str(e)}}")
@@ -420,7 +423,7 @@ class {class_name}(Model):
     _bedrock_runtime: object = PrivateAttr(default=None)
     _generator_config: dict = PrivateAttr(default={{"temperature": 0.0, "top_p": 1.0}})
     _last_request_time: float = PrivateAttr(default=0)
-    _min_request_interval: float = PrivateAttr(default=1.0)  # 最小リクエスト間隔（秒）
+    _min_request_interval: float = PrivateAttr(default=1.0)
     
 {ModelTemplate._get_bedrock_common_methods()}
 
@@ -445,9 +448,9 @@ class {class_name}(Model):
             except Exception as e:
                 if "ThrottlingException" in str(e):
                     print(f"Rate limit exceeded, retrying with backoff: {{str(e)}}")
-                    raise  # リトライロジックによって処理される
+                    raise
                 else:
-                    raise  # その他のエラーは上位で処理
+                    raise
                 
         except Exception as e:
             print(f"Prediction error: {{str(e)}}")
@@ -462,7 +465,7 @@ class {class_name}(Model):
     _bedrock_runtime: object = PrivateAttr(default=None)
     _generator_config: dict = PrivateAttr(default={{"temperature": 0.0, "top_p": 1.0}})
     _last_request_time: float = PrivateAttr(default=0)
-    _min_request_interval: float = PrivateAttr(default=1.0)  # 最小リクエスト間隔（秒）
+    _min_request_interval: float = PrivateAttr(default=1.0)
     
 {ModelTemplate._get_bedrock_common_methods()}
 
@@ -484,9 +487,9 @@ class {class_name}(Model):
             except Exception as e:
                 if "ThrottlingException" in str(e):
                     print(f"Rate limit exceeded, retrying with backoff: {{str(e)}}")
-                    raise  # リトライロジックによって処理される
+                    raise
                 else:
-                    raise  # その他のエラーは上位で処理
+                    raise
                 
         except Exception as e:
             print(f"Prediction error: {{str(e)}}")
@@ -501,14 +504,13 @@ class {class_name}(Model):
     _bedrock_runtime: object = PrivateAttr(default=None)
     _generator_config: dict = PrivateAttr(default={{"temperature": 0.0, "top_p": 1.0}})
     _last_request_time: float = PrivateAttr(default=0)
-    _min_request_interval: float = PrivateAttr(default=1.0)  # 最小リクエスト間隔（秒）
+    _min_request_interval: float = PrivateAttr(default=1.0)
     
 {ModelTemplate._get_bedrock_common_methods()}
 
     @weave.op()
     def predict(self, question: str) -> dict:
         try:
-            # デフォルトのリクエスト形式（モデルが特定できない場合）
             body_dict = {{
                 "prompt": question,
                 "max_tokens": 1024,
@@ -519,7 +521,6 @@ class {class_name}(Model):
                 response = self._invoke_model(body_dict)
                 response_body = json.loads(response.get("body").read())
                 
-                # 一般的なレスポンス形式を試行
                 if "generation" in response_body:
                     answer = response_body.get("generation", "")
                 elif "text" in response_body:
@@ -527,16 +528,16 @@ class {class_name}(Model):
                 elif "content" in response_body:
                     answer = response_body.get("content", "")
                 else:
-                    answer = str(response_body)  # 何も見つからない場合は全体を文字列化
+                    answer = str(response_body)
                 
                 return {{"answer": answer, "question": question}}
                 
             except Exception as e:
                 if "ThrottlingException" in str(e):
                     print(f"Rate limit exceeded, retrying with backoff: {{str(e)}}")
-                    raise  # リトライロジックによって処理される
+                    raise
                 else:
-                    raise  # その他のエラーは上位で処理
+                    raise
                 
         except Exception as e:
             print(f"Prediction error: {{str(e)}}")
