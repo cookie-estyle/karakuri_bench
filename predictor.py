@@ -255,7 +255,8 @@ class {class_name}(Model):
                     "inputText": question,
                     "textGenerationConfig": {{
                         "maxTokenCount": 1024,
-                        **self._generator_config,
+                        "temperature": self._generator_config.get("temperature", 0.0),
+                        "topP": self._generator_config.get("top_p", 1.0)
                     }}
                 }}
             elif "ai21" in model_id:
