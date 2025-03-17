@@ -6,6 +6,8 @@ MODELS_TO_EVALUATE = [
     # {'api_type': 'vllm', 'model_name': 'Qwen/Qwen2.5-7B-Instruct-1M'},
     # {'api_type': 'vllm', 'model_name': 'cyberagent/calm3-22b-chat'},
     # {'api_type': 'vllm', 'model_name': '01-ai/Yi-1.5-34B-Chat'},
+    # {'api_type': 'vllm', 'model_name': 'karakuri-ai/karakuri-lm-8x7b-chat-v0.1'},
+    # {'api_type': 'vllm', 'model_name': 'karakuri-ai/karakuri-lm-70b-chat-v0.1'},
     # {'api_type': 'openai', 'model_name': 'gpt-4o-2024-08-06'},
     # {'api_type': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18'},
     # {'api_type': 'openai', 'model_name': 'o1-2024-12-17'},
