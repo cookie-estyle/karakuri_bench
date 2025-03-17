@@ -14,7 +14,6 @@ class ModelTemplate:
                 "amazon_titan": cls._get_bedrock_amazon_titan_template,
                 "ai21": cls._get_bedrock_ai21_template,
                 "cohere": cls._get_bedrock_cohere_template,
-                "deepseek": cls._get_bedrock_deepseek_template,
                 "standard": cls._get_bedrock_standard_template
             },
             "google": {
@@ -41,8 +40,6 @@ class ModelTemplate:
                 template_type = "ai21"
             elif "cohere" in model_id:
                 template_type = "cohere"
-            elif "deepseek" in model_id:
-                template_type = "deepseek"
             else:
                 template_type = "standard"
         elif api_type == "google":
@@ -580,79 +577,6 @@ class {class_name}(Model):
                     raise
                 else:
                     print(f"Error processing response: {{str(e)}}")
-                    print(f"Request body: {{json.dumps(body_dict, indent=2)}}")
-                    raise
-                
-        except Exception as e:
-            print(f"Prediction error: {{str(e)}}")
-            return {{"answer": f"Error: {{str(e)}}", "question": question}}
-'''
-
-    @staticmethod
-    def _get_bedrock_deepseek_template(class_name: str) -> str:
-        return f'''
-class {class_name}(Model):
-    predict_model_name: str
-    _bedrock_runtime: object = PrivateAttr(default=None)
-    _generator_config: dict = PrivateAttr(default={{"temperature": 0.0, "top_p": 1.0}})
-    _last_request_time: float = PrivateAttr(default=0)
-    _min_request_interval: float = PrivateAttr(default=1.0)
-    
-{ModelTemplate._get_bedrock_common_methods()}
-
-    @weave.op()
-    def predict(self, question: str) -> dict:
-        try:
-            body_dict = {{
-                "messages": [
-                    {{
-                        "role": "user",
-                        "content": [
-                            {{
-                                "type": "text",
-                                "text": question
-                            }}
-                        ]
-                    }}
-                ],
-                "max_tokens": 1024,
-                "temperature": self._generator_config.get("temperature", 0.0),
-                "top_p": self._generator_config.get("top_p", 1.0),
-                "stop_sequences": ["\\n\\nHuman:"]
-            }}
-            
-            try:
-                response = self._invoke_model(body_dict)
-                response_body = json.loads(response.get("body").read())
-                
-                if "output" in response_body and "message" in response_body["output"]:
-                    if "content" in response_body["output"]["message"] and len(response_body["output"]["message"]["content"]) > 0:
-                        answer = response_body["output"]["message"]["content"][0].get("text", "")
-                    else:
-                        answer = str(response_body["output"]["message"])
-                elif "choices" in response_body and len(response_body["choices"]) > 0:
-                    message = response_body["choices"][0].get("message", {{}})
-                    if "content" in message:
-                        answer = message["content"]
-                    else:
-                        answer = str(message)
-                elif "message" in response_body:
-                    if isinstance(response_body["message"], dict) and "content" in response_body["message"]:
-                        answer = response_body["message"]["content"]
-                    else:
-                        answer = str(response_body["message"])
-                else:
-                    answer = str(response_body)
-                
-                return {{"answer": answer, "question": question}}
-                
-            except Exception as e:
-                if "ThrottlingException" in str(e):
-                    print(f"Rate limit exceeded, retrying with backoff: {{str(e)}}")
-                    raise
-                else:
-                    print(f"Error processing response: {{str(e)}}")
-                    print(f"Model ID: {{self.predict_model_name}}")
                     print(f"Request body: {{json.dumps(body_dict, indent=2)}}")
                     raise
                 

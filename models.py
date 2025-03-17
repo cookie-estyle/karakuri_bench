@@ -33,7 +33,6 @@ MODELS_TO_EVALUATE = [
     # {'api_type': 'bedrock', 'model_name': 'cohere.command-r-plus-v1:0'},
     # {'api_type': 'bedrock', 'model_name': 'cohere.command-r-v1:0'},
     # {'api_type': 'bedrock', 'model_name': 'cohere.command-text-v14'},
-    # {'api_type': 'bedrock', 'model_name': 'deepseek.r1-v1:0'},
     # {'api_type': 'bedrock', 'model_name': 'meta.llama3-8b-instruct-v1:0'},
     # {'api_type': 'bedrock', 'model_name': 'meta.llama3-70b-instruct-v1:0'},
     # {'api_type': 'bedrock', 'model_name': 'meta.llama3-1-8b-instruct-v1:0'},
