@@ -19,6 +19,9 @@ class ModelTemplate:
             "google": {
                 "standard": cls._get_google_template
             },
+            "deepseek": {
+                "standard": cls._get_deepseek_template
+            },
             "vllm": {
                 "standard": cls._get_vllm_template
             }
@@ -45,6 +48,8 @@ class ModelTemplate:
             else:
                 template_type = "standard"
         elif api_type == "google":
+            template_type = "standard"
+        elif api_type == "deepseek":
             template_type = "standard"
         else:
             template_type = "standard"
@@ -633,6 +638,53 @@ class {class_name}(Model):
                 else:
                     print("All retry attempts failed")
                     return {{'answer': f"Error after {{max_retries}} attempts: {{str(e)}}", 'question': question}}
+'''
+
+    @staticmethod
+    def _get_deepseek_template(class_name: str) -> str:
+        return f'''
+class {class_name}(Model):
+    predict_model_name: str
+    _last_request_time: float = PrivateAttr(default=0)
+    _min_request_interval: float = PrivateAttr(default=1.0)
+
+    def _wait_for_rate_limit(self):
+        current_time = time.time()
+        time_since_last_request = current_time - self._last_request_time
+        if time_since_last_request < self._min_request_interval:
+            sleep_time = self._min_request_interval - time_since_last_request
+            sleep_time += random.uniform(0, 0.5)
+            time.sleep(sleep_time)
+        self._last_request_time = time.time()
+
+    @weave.op()
+    def predict(self, question: str) -> dict:
+        from openai import OpenAI
+        import os
+        
+        try:
+            self._wait_for_rate_limit()
+            
+            client = OpenAI(
+                api_key=os.environ.get("DEEPSEEK_API_KEY"),
+                base_url="https://api.deepseek.com"
+            )
+            
+            response = client.chat.completions.create(
+                model=self.predict_model_name,
+                messages=[
+                    {{"role": "user", "content": question}}
+                ],
+                temperature=0.0,
+                response_format={{"type": "text"}},
+            )
+            
+            answer = response.choices[0].message.content
+            return {{'answer': answer, 'question': question}}
+            
+        except Exception as e:
+            print(f"Prediction error: {{str(e)}}")
+            return {{'answer': f"Error: {{str(e)}}", 'question': question}}
 '''
 
     @staticmethod

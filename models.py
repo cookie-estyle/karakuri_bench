@@ -54,4 +54,5 @@ MODELS_TO_EVALUATE = [
     # {'api_type': 'bedrock', 'model_name': 'mistral.mistral-large-2407-v1:0'},
     # {'api_type': 'bedrock', 'model_name': 'mistral.mistral-small-2402-v1:0'},
     # {'api_type': 'bedrock', 'model_name': 'mistral.mixtral-8x7b-instruct-v0:1'},
+    # {'api_type': 'deepseek', 'model_name': 'deepseek-chat'},
 ]
