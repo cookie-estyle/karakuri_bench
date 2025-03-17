@@ -24,7 +24,9 @@ class ModelTemplate:
             }
         }
         
-        if api_type == "bedrock":
+        if api_type == "openai":
+            template_type = "o_series" if model_name.startswith("o") else "standard"
+        elif api_type == "bedrock":
             model_id = model_name.lower()
             if "amazon.nova" in model_id:
                 template_type = "amazon_nova"
@@ -45,7 +47,7 @@ class ModelTemplate:
         elif api_type == "google":
             template_type = "standard"
         else:
-            template_type = "o_series" if model_name.startswith("o") else "standard"
+            template_type = "standard"
             
         return templates[api_type][template_type](class_name)
 
@@ -96,68 +98,6 @@ class {class_name}(Model):
         except Exception as e:
             print(f"Prediction error: {{str(e)}}")
             raise
-'''
-
-    @staticmethod
-    def _get_google_template(class_name: str) -> str:
-        return f'''
-class {class_name}(Model):
-    predict_model_name: str
-    _last_request_time: float = PrivateAttr(default=0)
-    _min_request_interval: float = PrivateAttr(default=5.0)
-
-    def _wait_for_rate_limit(self):
-        current_time = time.time()
-        time_since_last_request = current_time - self._last_request_time
-        if time_since_last_request < self._min_request_interval:
-            sleep_time = self._min_request_interval - time_since_last_request
-            sleep_time += random.uniform(0, 0.5)
-            time.sleep(sleep_time)
-        self._last_request_time = time.time()
-
-    @weave.op()
-    def predict(self, question: str) -> dict:
-        from langchain_google_genai import ChatGoogleGenerativeAI
-        from google.generativeai.types import HarmCategory, HarmBlockThreshold
-        import os
-
-        max_retries = 5
-        base_delay = 4
-        max_delay = 60
-        
-        for attempt in range(max_retries):
-            try:
-                self._wait_for_rate_limit()
-                
-                categories = [
-                    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                    HarmCategory.HARM_CATEGORY_HARASSMENT,
-                    HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                ]
-                safety_settings = {{cat: HarmBlockThreshold.BLOCK_NONE for cat in categories}}
-
-                llm = ChatGoogleGenerativeAI(
-                    model=self.predict_model_name,
-                    api_key=os.environ["GOOGLE_API_KEY"],
-                    safety_settings=safety_settings,
-                    temperature=0.0,
-                )
-
-                response = llm.invoke(question)
-                answer = response.content
-                
-                return {{'answer': answer, 'question': question}}
-                
-            except Exception as e:
-                print(f"Attempt {{attempt+1}}/{{max_retries}} failed: {{str(e)}}")
-                if attempt < max_retries - 1:
-                    delay = min(max_delay, base_delay * (2 ** attempt))
-                    print(f"Retrying in {{delay}} seconds...")
-                    time.sleep(delay)
-                else:
-                    print("All retry attempts failed")
-                    return {{'answer': f"Error after {{max_retries}} attempts: {{str(e)}}", 'question': question}}
 '''
 
     @staticmethod
@@ -631,6 +571,68 @@ class {class_name}(Model):
         except Exception as e:
             print(f"Prediction error: {{str(e)}}")
             return {{"answer": f"Error: {{str(e)}}", "question": question}}
+'''
+
+    @staticmethod
+    def _get_google_template(class_name: str) -> str:
+        return f'''
+class {class_name}(Model):
+    predict_model_name: str
+    _last_request_time: float = PrivateAttr(default=0)
+    _min_request_interval: float = PrivateAttr(default=5.0)
+
+    def _wait_for_rate_limit(self):
+        current_time = time.time()
+        time_since_last_request = current_time - self._last_request_time
+        if time_since_last_request < self._min_request_interval:
+            sleep_time = self._min_request_interval - time_since_last_request
+            sleep_time += random.uniform(0, 0.5)
+            time.sleep(sleep_time)
+        self._last_request_time = time.time()
+
+    @weave.op()
+    def predict(self, question: str) -> dict:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        from google.generativeai.types import HarmCategory, HarmBlockThreshold
+        import os
+
+        max_retries = 5
+        base_delay = 4
+        max_delay = 60
+        
+        for attempt in range(max_retries):
+            try:
+                self._wait_for_rate_limit()
+                
+                categories = [
+                    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                    HarmCategory.HARM_CATEGORY_HARASSMENT,
+                    HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                ]
+                safety_settings = {{cat: HarmBlockThreshold.BLOCK_NONE for cat in categories}}
+
+                llm = ChatGoogleGenerativeAI(
+                    model=self.predict_model_name,
+                    api_key=os.environ["GOOGLE_API_KEY"],
+                    safety_settings=safety_settings,
+                    temperature=0.0,
+                )
+
+                response = llm.invoke(question)
+                answer = response.content
+                
+                return {{'answer': answer, 'question': question}}
+                
+            except Exception as e:
+                print(f"Attempt {{attempt+1}}/{{max_retries}} failed: {{str(e)}}")
+                if attempt < max_retries - 1:
+                    delay = min(max_delay, base_delay * (2 ** attempt))
+                    print(f"Retrying in {{delay}} seconds...")
+                    time.sleep(delay)
+                else:
+                    print("All retry attempts failed")
+                    return {{'answer': f"Error after {{max_retries}} attempts: {{str(e)}}", 'question': question}}
 '''
 
     @staticmethod
