@@ -36,6 +36,15 @@ INITIAL_RETRY_DELAY = 5
 MAX_RETRY_DELAY = 30
 
 class EvaluationResult(BaseModel):
+    """
+    評価結果を格納するためのモデルクラス
+    
+    Attributes:
+        response_text (str): 評価モデルからの応答テキスト
+        category (str): 評価カテゴリ
+        score (int | None): 評価スコア、失敗した場合はNone
+        retries (int): 評価の再試行回数
+    """
     response_text: str
     category: str
     score: int | None
@@ -50,7 +59,20 @@ async def evaluate(
     example_answer=None,
     marking_scheme=None,
 ) -> EvaluationResult:
-
+    """
+    モデルの出力を評価する関数
+    
+    Args:
+        output: モデルからの出力
+        index: データセット内のインデックス
+        category: 評価カテゴリ
+        question: 元の質問
+        example_answer: 模範回答
+        marking_scheme: 採点基準
+        
+    Returns:
+        EvaluationResult: 評価結果を含むオブジェクト
+    """
     if output is None:
         return {
             "response_text": "Prediction failed: No output received",
@@ -141,6 +163,16 @@ async def evaluate(
     }
 
 async def evaluate_all_models():
+    """
+    設定されたすべてのモデルを評価する非同期関数
+    
+    設定ファイルから読み込んだモデルリストに対して評価を実行し、
+    結果を収集します。vLLMモデルの場合は、評価前にサーバーを起動し、
+    評価後にサーバーを停止します。
+    
+    Returns:
+        dict: モデル名をキーとし、評価結果を値とする辞書
+    """
     weave.init(PROJECT)
     
     dataset = weave.ref(DATASET_REF).get()

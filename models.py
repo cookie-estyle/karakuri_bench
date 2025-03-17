@@ -1,4 +1,9 @@
-# evaluate model list
+"""
+評価対象モデル定義モジュール
+
+このモジュールでは、評価対象となるモデルのリストを定義します。
+各モデルはAPIタイプとモデル名のペアで指定されます。
+"""
 MODELS_TO_EVALUATE = [
     # {'api_type': 'vllm', 'model_name': 'microsoft/Phi-4-mini-instruct'},
     # {'api_type': 'vllm', 'model_name': 'microsoft/phi-4'},

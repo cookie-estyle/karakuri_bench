@@ -12,6 +12,16 @@ from pathlib import Path
 import json
 
 def start_vllm_server(model_id):
+    """
+    指定されたモデルIDでvLLMサーバーを起動します
+    
+    Args:
+        model_id (str): Hugging Face モデルID
+        
+    Note:
+        サーバーは起動後、ヘルスチェックが成功するまで待機します。
+        プロセスIDは vllm_server.pid ファイルに保存されます。
+    """
     chat_template: str = get_chat_template(model_id)
 
     available_gpus = torch.cuda.device_count()
@@ -80,6 +90,12 @@ def start_vllm_server(model_id):
         time.sleep(10)  # 待機してから再試行
 
 def stop_vllm_server():
+    """
+    実行中のvLLMサーバーを停止します
+    
+    vllm_server.pid ファイルからプロセスIDを読み取り、
+    SIGTERMシグナルを送信してサーバーを停止します。
+    """
     pid_file = Path('vllm_server.pid')
     if pid_file.exists():
         with pid_file.open('r') as f:
@@ -97,7 +113,6 @@ def stop_vllm_server():
 def get_chat_template(model_id):
     """
     モデルのchat_templateを取得する関数
-    指定の方法でchat_templateが取得できない場合はエラーを発生させる
     
     Args:
         model_id (str): Hugging Face モデルID

@@ -1,6 +1,24 @@
 class ModelTemplate:
+    """
+    モデル予測用のコードテンプレートを生成するクラス
+    
+    様々なAPIタイプ（OpenAI、Bedrock、Google、DeepSeek、vLLM）に対応した
+    モデル予測用のPythonコードテンプレートを提供します。
+    """
+
     @classmethod
     def get_template(cls, api_type: str, model_name: str, class_name: str) -> str:
+        """
+        指定されたAPIタイプとモデル名に基づいて適切なテンプレートを取得します
+        
+        Args:
+            api_type (str): API種別 ('openai', 'bedrock', 'google', 'deepseek', 'vllm')
+            model_name (str): モデル名
+            class_name (str): 生成するクラスの名前
+            
+        Returns:
+            str: モデル予測用のPythonコードテンプレート
+        """
         templates = {
             "openai": {
                 "standard": cls._get_openai_standard_template,
